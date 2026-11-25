@@ -4,6 +4,7 @@ frontend/dist/
 backend/.env
 backend/data/*.csv
 backend/data/*.tmp
+backend/backups/
 .pids/
 .logs/
 .DS_Store

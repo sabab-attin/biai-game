@@ -120,8 +120,9 @@ function drawWheel() {
     ctx.translate(cx, cy);
     ctx.rotate(mid);
 
-    const fontSize = Math.max(15, Math.round(size * 0.056));
-    const subSize = Math.max(10, Math.round(size * 0.026));
+    const labelScale = count > 6 ? 0.78 : 1;
+    const fontSize = Math.max(12, Math.round(size * 0.056 * labelScale));
+    const subSize = Math.max(9, Math.round(size * 0.026 * labelScale));
     const textRadius = wheelR * 0.64;
 
     ctx.fillStyle = fg;
@@ -331,13 +332,6 @@ const pointerLabel = computed(() => {
   return current ? `Pointer: ${current.title}` : '';
 });
 
-const hubText = computed(() => {
-  if (props.isSpinning) return 'SPIN';
-  if (!props.isLoggedIn) return 'ENTER';
-  if (props.canSpin) return 'SPIN';
-  return 'DONE';
-});
-
 onMounted(async () => {
   if (document.fonts?.ready) {
     await document.fonts.ready;
@@ -383,7 +377,7 @@ onBeforeUnmount(() => {
           ref="canvasRef"
           class="wheel-canvas"
           role="img"
-          aria-label="Prize spinning wheel with five wedges: Free Course, Chocolates, Gift Card, Stickers, and Wristbands"
+          :aria-label="`Prize spinning wheel with ${prizes.length} prize wedges`"
         ></canvas>
 
         <button
@@ -400,7 +394,7 @@ onBeforeUnmount(() => {
           "
           @click="$emit('hubClick')"
         >
-          {{ hubText }}
+          SPIN
         </button>
       </div>
     </div>

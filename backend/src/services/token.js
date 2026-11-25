@@ -1,44 +1,100 @@
 import crypto from 'node:crypto';
 
-const TOKEN_TTL_MS = 1000 * 60 * 60 * 24;
+const PLAYER_TOKEN_TTL_MS = 1000 * 60 * 60 * 24;
+const ADMIN_TOKEN_TTL_MS = 1000 * 60 * 60 * 8;
+const QUIZ_TOKEN_TTL_MS = 1000 * 60 * 60 * 2;
 
 function sign(payloadB64, secret) {
   return crypto.createHmac('sha256', secret).update(payloadB64).digest('base64url');
 }
 
-export function createPlayerToken(playerId, secret) {
-  const payload = {
-    pid: String(playerId),
-    exp: Date.now() + TOKEN_TTL_MS,
-  };
+function signPayload(payload, secret) {
   const payloadB64 = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
-  const signature = sign(payloadB64, secret);
-  return `${payloadB64}.${signature}`;
+  return `${payloadB64}.${sign(payloadB64, secret)}`;
 }
 
-export function verifyPlayerToken(token, secret) {
+function verifyPayload(token, secret) {
   if (!token || typeof token !== 'string' || !token.includes('.')) {
     return null;
   }
+
   const [payloadB64, sig] = token.split('.');
   if (!payloadB64 || !sig) {
     return null;
   }
+
   const expected = sign(payloadB64, secret);
   const sigBuf = Buffer.from(sig, 'utf8');
   const expBuf = Buffer.from(expected, 'utf8');
   if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
     return null;
   }
+
   try {
     const parsed = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
-    if (!parsed.pid || !parsed.exp || Date.now() > Number(parsed.exp)) {
+    if (!parsed.exp || Date.now() > Number(parsed.exp)) {
       return null;
     }
-    return parsed.pid;
+    return parsed;
   } catch {
     return null;
   }
+}
+
+export function createPlayerToken(playerId, secret) {
+  return signPayload({ pid: String(playerId), exp: Date.now() + PLAYER_TOKEN_TTL_MS }, secret);
+}
+
+export function verifyPlayerToken(token, secret) {
+  const payload = verifyPayload(token, secret);
+  return payload?.pid || null;
+}
+
+export function createAdminToken(adminId, role, secret) {
+  return signPayload(
+    {
+      aid: String(adminId),
+      role,
+      kind: 'admin',
+      exp: Date.now() + ADMIN_TOKEN_TTL_MS,
+    },
+    secret
+  );
+}
+
+export function verifyAdminToken(token, secret) {
+  const payload = verifyPayload(token, secret);
+  if (!payload || payload.kind !== 'admin' || !payload.aid || payload.role !== 'admin') {
+    return null;
+  }
+  return payload;
+}
+
+export function createQuizToken({ playerId, questionIds, quizId }, secret) {
+  return signPayload(
+    {
+      pid: String(playerId),
+      qids: questionIds,
+      quizId,
+      kind: 'quiz',
+      exp: Date.now() + QUIZ_TOKEN_TTL_MS,
+    },
+    secret
+  );
+}
+
+export function verifyQuizToken(token, secret) {
+  const payload = verifyPayload(token, secret);
+  if (
+    !payload ||
+    payload.kind !== 'quiz' ||
+    !payload.pid ||
+    !Array.isArray(payload.qids) ||
+    !payload.quizId
+  ) {
+    return null;
+  }
+  return payload;
 }
 
 export function verifyPasskey(provided, expected) {

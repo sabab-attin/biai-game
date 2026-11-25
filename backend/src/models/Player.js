@@ -9,6 +9,11 @@ const playerSchema = new mongoose.Schema(
       minlength: 2,
       maxlength: 80,
     },
+    isGuest: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     phone: {
       type: String,
       default: '',

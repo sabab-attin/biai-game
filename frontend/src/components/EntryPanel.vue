@@ -14,6 +14,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  spinAgain: {
+    type: Boolean,
+    default: false,
+  },
   entryError: {
     type: String,
     default: '',
@@ -24,7 +28,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['enter', 'spin', 'switchPlayer']);
+const emit = defineEmits(['enter', 'guest', 'spin', 'switchPlayer']);
 
 const form = reactive({
   name: '',
@@ -75,21 +79,19 @@ function handleSubmit() {
     return;
   }
 
-  if (!phone && !email) {
+  if (!phone) {
     localField.value = 'phone';
-    localError.value = 'Enter a phone number, an email address, or both.';
+    localError.value = 'Enter your phone number.';
     phoneInputRef.value?.focus();
     return;
   }
 
-  if (phone) {
-    const cleaned = phone.replace(/[\s().-]/g, '');
-    if (!/^\+?\d{7,15}$/.test(cleaned)) {
-      localField.value = 'phone';
-      localError.value = 'Phone number must be 7 to 15 digits.';
-      phoneInputRef.value?.focus();
-      return;
-    }
+  const cleaned = phone.replace(/[\s().-]/g, '');
+  if (!/^01[3-9]\d{8}$/.test(cleaned) && !/^\+8801[3-9]\d{8}$/.test(cleaned)) {
+    localField.value = 'phone';
+    localError.value = 'Enter an 11-digit Bangladesh mobile number starting with 01, or use +880.';
+    phoneInputRef.value?.focus();
+    return;
   }
 
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
@@ -167,7 +169,9 @@ function handleSwitch() {
 
         <div class="field-row">
           <div class="field">
-            <label class="field__label" for="player-phone">Phone number</label>
+            <label class="field__label" for="player-phone">
+              Phone number <span class="field__req">(required)</span>
+            </label>
             <input
               id="player-phone"
               ref="phoneInputRef"
@@ -178,6 +182,7 @@ function handleSwitch() {
               inputmode="tel"
               autocomplete="tel"
               placeholder="+880 1711-000000"
+              aria-required="true"
               :aria-invalid="localField === 'phone' ? 'true' : undefined"
               :aria-describedby="localError ? 'entry-help' : undefined"
               @input="clearFieldError('phone')"
@@ -185,7 +190,9 @@ function handleSwitch() {
           </div>
 
           <div class="field">
-            <label class="field__label" for="player-email">Email address</label>
+            <label class="field__label" for="player-email">
+              Email address <span class="field__optional">(optional)</span>
+            </label>
             <input
               id="player-email"
               ref="emailInputRef"
@@ -208,7 +215,12 @@ function handleSwitch() {
           :class="{ 'form-help--error': Boolean(localError) }"
           aria-live="polite"
         >
-          {{ localError || 'Provide a phone number, an email address, or both.' }}
+          {{ localError || 'Phone number is required. Email is optional — add it if you want prize updates.' }}
+        </p>
+
+        <p class="form-consent">
+          Your name and phone number are used only to run this event and arrange prize collection.
+          Email is optional. We never sell your details.
         </p>
 
         <div class="btn-pair">
@@ -219,6 +231,15 @@ function handleSwitch() {
             :aria-busy="isSubmittingEntry ? 'true' : 'false'"
           >
             {{ isSubmittingEntry ? 'SAVING' : 'SAVE & PLAY' }}
+          </button>
+
+          <button
+            type="button"
+            class="btn"
+            :disabled="isSubmittingEntry"
+            @click="emit('guest')"
+          >
+            CONTINUE AS GUEST
           </button>
         </div>
       </form>
@@ -235,8 +256,8 @@ function handleSwitch() {
           </div>
         </dl>
 
-        <p class="form-help" aria-live="polite">
-          Entry recorded in MongoDB and CSV. One spin is ready for your ticket.
+        <p v-if="spinAgain" class="form-help form-help--success" aria-live="polite">
+          Spin Again! You have another turn.
         </p>
 
         <div class="btn-pair">
@@ -284,30 +305,22 @@ function handleSwitch() {
             <span class="ticket-code__value">{{ player.claimCode }}</span>
           </div>
           <button type="button" class="btn btn--compact" @click="copyCode">
-            {{ copied ? 'COPIED' : 'COPY' }}
+            {{ copied ? 'COPIED' : 'COPY CODE' }}
           </button>
         </div>
 
-        <p class="form-help" aria-live="polite">
-          Prize saved to MongoDB and backend CSV. Show your code at the BIAI desk.
-        </p>
-
-        <p class="ticket-promo">
-          Build real AI tools from Day 1 with Bangladesh Institute of Artificial Intelligence.
-        </p>
-
         <div class="btn-pair">
+          <button type="button" class="btn btn--primary" @click="handleSwitch">
+            PLAY NEXT GUEST
+          </button>
           <a
-            class="btn btn--primary"
+            class="btn"
             href="https://biai.com.bd/courses"
             target="_blank"
             rel="noopener noreferrer"
           >
-            EXPLORE BIAI COURSES
+            BIAI COURSES
           </a>
-          <button type="button" class="btn" @click="handleSwitch">
-            PLAY NEXT GUEST
-          </button>
         </div>
       </div>
     </Transition>

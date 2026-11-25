@@ -3,6 +3,7 @@ const API_BASE = '/api';
 async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
+    credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/json',
       ...(options.headers || {}),
@@ -27,18 +28,16 @@ export function fetchPrizes() {
   return request('/prizes');
 }
 
-export function fetchStats() {
-  return request('/stats');
-}
-
-export function fetchRecentSpins() {
-  return request('/wheel/recent');
-}
-
 export function enterPlayer(data) {
   return request('/players/enter', {
     method: 'POST',
     body: JSON.stringify(data),
+  });
+}
+
+export function enterAsGuest() {
+  return request('/players/guest', {
+    method: 'POST',
   });
 }
 
@@ -59,23 +58,31 @@ export function spinWheel(token) {
   });
 }
 
-export function fetchAdminEntries(passkey) {
-  return request('/admin/entries', {
+export function startQuiz(token) {
+  return request('/quiz/start', {
+    method: 'POST',
     headers: {
-      'x-admin-key': passkey,
+      Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function downloadAdminCsv(passkey) {
-  const res = await fetch(`${API_BASE}/admin/export.csv`, {
+export function answerQuiz(token, payload) {
+  return request('/quiz/answer', {
+    method: 'POST',
     headers: {
-      'x-admin-key': passkey,
+      Authorization: `Bearer ${token}`,
     },
+    body: JSON.stringify(payload),
   });
-  if (!res.ok) {
-    const data = await res.json().catch(() => null);
-    throw new Error(data?.error || 'Could not download CSV export.');
-  }
-  return res.blob();
+}
+
+export function finishQuiz(token, payload) {
+  return request('/quiz/finish', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
 }

@@ -9,7 +9,7 @@ export function createApp(config) {
   app.use(
     cors({
       origin: config.frontendOrigin ? [config.frontendOrigin, 'http://127.0.0.1:5173'] : true,
-      credentials: false,
+      credentials: true,
     })
   );
   app.use(express.json({ limit: '64kb' }));
