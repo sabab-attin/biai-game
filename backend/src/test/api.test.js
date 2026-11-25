@@ -118,7 +118,10 @@ test('player enters with phone, stores in MongoDB + CSV, spins once, and exports
   });
   assert.equal(adminExport.status, 200);
   const downloadedCsv = await adminExport.text();
-  assert.match(downloadedCsv, /playerId,name,phone,email,status,prizeWon,claimCode,enteredAt,spunAt/);
+  assert.match(
+    downloadedCsv,
+    /playerId,name,phone,email,status,prizeWon,claimCode,enteredAt,spunAt,spinsUsed,lastLoginAt/
+  );
   assert.match(downloadedCsv, /Tariq Hasan/);
 });
 

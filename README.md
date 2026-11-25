@@ -29,7 +29,7 @@ Stop both services cleanly:
 - **BIAI Marketing Integration**:
   - Features BIAI's emblem and real programs from `biai.com.bd` (Free 3-Hour Live AI Masterclass, 3-Day Generative AI Bootcamp, AI Generalist Fellowship, In-Person Dhaka Cohort) with direct links to `biai.com.bd/courses` and WhatsApp (`+880 1328 446600`).
 - **Organizer CSV Ledger**:
-  - Click **Organizer CSV** in the top navigation or footer and enter `ADMIN_PASSKEY` (default `biai2026` in `backend/.env`) to preview records and download `carnival-wheel-entries.csv`.
+  - Click **Organizer CSV** in the top navigation or footer and enter `ADMIN_PASSKEY` (default `biai2026` in `backend/.env`) every time to preview records and download `biai-prize-wheel-entries.csv`.
 
 ## Testing & Build
 

@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-const CSV_HEADER = 'playerId,name,phone,email,status,prizeWon,claimCode,enteredAt,spunAt';
+const CSV_HEADER = 'playerId,name,phone,email,status,prizeWon,claimCode,enteredAt,spunAt,spinsUsed,lastLoginAt';
 const queues = new Map();
 
 function sanitizeCell(rawValue) {
@@ -35,6 +35,8 @@ function serializePlayersToCsv(players) {
       player.claimCode || '',
       player.enteredAt ? new Date(player.enteredAt).toISOString() : '',
       player.spunAt ? new Date(player.spunAt).toISOString() : '',
+      player.spinsUsed ?? 0,
+      player.lastLoginAt ? new Date(player.lastLoginAt).toISOString() : '',
     ];
     return cells.map(sanitizeCell).join(',');
   });

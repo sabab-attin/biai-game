@@ -346,7 +346,7 @@ export function createApiRouter(config) {
       await syncAllPlayersToCsv(config.csvFilePath);
       const csv = await readCsvFile(config.csvFilePath);
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', 'attachment; filename="carnival-wheel-entries.csv"');
+      res.setHeader('Content-Disposition', 'attachment; filename="biai-prize-wheel-entries.csv"');
       res.send(csv);
     } catch (error) {
       next(error);
