@@ -18,7 +18,7 @@ export function loadConfig(overrides = {}) {
     mongodbUri: overrides.mongodbUri || process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/carnival_wheel',
     csvFilePath,
     sessionSecret: overrides.sessionSecret || process.env.SESSION_SECRET || 'carnival-wheel-dev-secret-2026',
-    adminPasskey: overrides.adminPasskey || process.env.ADMIN_PASSKEY || 'carnival2026',
+    adminPasskey: overrides.adminPasskey || process.env.ADMIN_PASSKEY || 'biai2026',
     maxSpinsPerPlayer: Math.max(1, Number(overrides.maxSpinsPerPlayer ?? process.env.MAX_SPINS_PER_PLAYER ?? 1)),
     frontendOrigin: overrides.frontendOrigin || process.env.FRONTEND_ORIGIN || 'http://localhost:5173',
   };
