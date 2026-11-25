@@ -1215,6 +1215,69 @@
   }
 }
 
+/* Anchor Offset for Smooth Scrolling */
+#main,
+#prizes,
+#biai-programs,
+#rules,
+#recent {
+  scroll-margin-top: var(--space-3xl);
+}
+
+/* Standard Loading Spinner & Skeleton States */
+@keyframes spinner-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: var(--radius-round);
+  animation: spinner-rotate 700ms linear infinite;
+}
+
+.loading-panel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 120px;
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--color-ink-2);
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.skeleton-list {
+  display: grid;
+  gap: var(--space-sm);
+  padding-top: var(--space-md);
+}
+
+.skeleton-row {
+  height: 36px;
+  border-radius: var(--radius-card);
+  background: var(--color-paper-3);
+  animation: skeleton-pulse 1.3s var(--ease-in-out) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .js [data-reveal] {
     opacity: 1;
@@ -1224,7 +1287,12 @@
 
   .ticket-prize,
   .wheel-hub--ready,
-  .carnival-dialog[open] {
+  .carnival-dialog[open],
+  .skeleton-row {
     animation: none;
+  }
+
+  .loading-spinner {
+    animation: skeleton-pulse 1.6s ease-in-out infinite;
   }
 }

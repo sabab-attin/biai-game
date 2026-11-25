@@ -1,6 +1,7 @@
 <script setup>
 import { nextTick, ref, watch } from 'vue';
 import { downloadAdminCsv, fetchAdminEntries } from '../api/client.js';
+import LoadingSpinner from './LoadingSpinner.vue';
 
 const props = defineProps({
   open: {
@@ -18,6 +19,7 @@ const activePasskey = ref('');
 const unlocked = ref(false);
 const entries = ref([]);
 const isLoading = ref(false);
+const isDownloading = ref(false);
 const errorMsg = ref('');
 const downloadNotice = ref('');
 
@@ -95,7 +97,7 @@ async function handleDownloadCsv() {
     resetSessionState();
     return;
   }
-  isLoading.value = true;
+  isDownloading.value = true;
   errorMsg.value = '';
   downloadNotice.value = '';
   try {
@@ -112,7 +114,7 @@ async function handleDownloadCsv() {
   } catch (error) {
     errorMsg.value = error.message || 'Could not export CSV.';
   } finally {
-    isLoading.value = false;
+    isDownloading.value = false;
   }
 }
 
@@ -163,21 +165,46 @@ function formatTime(iso) {
         </p>
 
         <div class="dialog__actions">
-          <button type="submit" class="btn btn--primary" :disabled="isLoading">
-            {{ isLoading ? 'LOADING' : 'OPEN LOG' }}
+          <button
+            type="submit"
+            class="btn btn--primary"
+            :disabled="isLoading"
+            :aria-busy="isLoading ? 'true' : 'false'"
+          >
+            <LoadingSpinner v-if="isLoading" />
+            <span>{{ isLoading ? 'LOADING' : 'OPEN LOG' }}</span>
           </button>
         </div>
       </form>
 
       <template v-else>
         <div class="dialog__actions">
-          <button type="button" class="btn btn--primary" :disabled="isLoading" @click="handleDownloadCsv">
-            DOWNLOAD CSV
+          <button
+            type="button"
+            class="btn btn--primary"
+            :disabled="isLoading || isDownloading"
+            :aria-busy="isDownloading ? 'true' : 'false'"
+            @click="handleDownloadCsv"
+          >
+            <LoadingSpinner v-if="isDownloading" />
+            <span>{{ isDownloading ? 'EXPORTING' : 'DOWNLOAD CSV' }}</span>
           </button>
-          <button type="button" class="btn" :disabled="isLoading" @click="loadEntries(activePasskey)">
-            REFRESH
+          <button
+            type="button"
+            class="btn"
+            :disabled="isLoading || isDownloading"
+            :aria-busy="isLoading ? 'true' : 'false'"
+            @click="loadEntries(activePasskey)"
+          >
+            <LoadingSpinner v-if="isLoading" />
+            <span>{{ isLoading ? 'LOADING' : 'REFRESH' }}</span>
           </button>
-          <button type="button" class="btn" :disabled="isLoading" @click="resetSessionState">
+          <button
+            type="button"
+            class="btn"
+            :disabled="isLoading || isDownloading"
+            @click="resetSessionState"
+          >
             LOCK
           </button>
           <span class="recent-sub">{{ entries.length }} recorded entries</span>

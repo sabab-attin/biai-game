@@ -79,6 +79,8 @@ const recentSpins = ref([]);
 const player = ref(null);
 const sessionToken = ref('');
 
+const isInitialLoading = ref(true);
+const isRestoringSession = ref(Boolean(localStorage.getItem(TOKEN_KEY)));
 const isSubmittingEntry = ref(false);
 const isSpinning = ref(false);
 const entryError = ref('');
@@ -127,6 +129,7 @@ onMounted(async () => {
   }
 
   await refreshPublicData();
+  isInitialLoading.value = false;
 
   const savedToken = localStorage.getItem(TOKEN_KEY);
   if (savedToken) {
@@ -138,6 +141,7 @@ onMounted(async () => {
       localStorage.removeItem(TOKEN_KEY);
     }
   }
+  isRestoringSession.value = false;
 });
 
 onBeforeUnmount(() => {
@@ -225,6 +229,7 @@ function handleSwitchPlayer() {
           <EntryPanel
             ref="entryPanelRef"
             :player="player"
+            :is-restoring-session="isRestoringSession"
             :is-submitting-entry="isSubmittingEntry"
             :is-spinning="isSpinning"
             :entry-error="entryError"
@@ -258,7 +263,7 @@ function handleSwitchPlayer() {
 
     <BiaiShowcase />
 
-    <HowAndRecent :recent-spins="recentSpins" />
+    <HowAndRecent :recent-spins="recentSpins" :is-loading="isInitialLoading" />
   </main>
 
   <footer class="site-footer">

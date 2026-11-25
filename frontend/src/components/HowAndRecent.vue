@@ -4,6 +4,10 @@ defineProps({
     type: Array,
     default: () => [],
   },
+  isLoading: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 function formatTimestamp(isoString) {
@@ -59,7 +63,14 @@ function formatTimestamp(isoString) {
             <span class="recent-sub">Live database feed</span>
           </div>
 
-          <TransitionGroup v-if="recentSpins.length" name="winner-list" tag="ul" class="recent-list">
+          <div v-if="isLoading && !recentSpins.length" class="skeleton-list" role="status">
+            <span class="visually-hidden">Loading recent winners...</span>
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+          </div>
+
+          <TransitionGroup v-else-if="recentSpins.length" name="winner-list" tag="ul" class="recent-list">
             <li v-for="item in recentSpins" :key="item.id" class="recent-item">
               <span class="recent-item__name">{{ item.firstName }}</span>
               <span class="recent-item__prize">{{ item.prizeTitle }}</span>

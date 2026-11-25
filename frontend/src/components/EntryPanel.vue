@@ -1,10 +1,15 @@
 <script setup>
 import { reactive, ref, watch } from 'vue';
+import LoadingSpinner from './LoadingSpinner.vue';
 
 const props = defineProps({
   player: {
     type: Object,
     default: null,
+  },
+  isRestoringSession: {
+    type: Boolean,
+    default: false,
   },
   isSubmittingEntry: {
     type: Boolean,
@@ -58,7 +63,12 @@ watch(
 );
 
 function focusNameInput() {
-  nameInputRef.value?.focus();
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  nameInputRef.value?.scrollIntoView({
+    behavior: prefersReduced ? 'auto' : 'smooth',
+    block: 'center',
+  });
+  nameInputRef.value?.focus({ preventScroll: true });
 }
 
 defineExpose({ focusNameInput });
@@ -138,8 +148,13 @@ function handleSwitch() {
 <template>
   <section class="well" aria-label="Player check-in and prize status">
     <Transition name="panel-swap" mode="out-in">
+      <div v-if="isRestoringSession" key="restoring" class="loading-panel" role="status">
+        <LoadingSpinner />
+        <span>Loading your entry...</span>
+      </div>
+
       <form
-        v-if="!player"
+        v-else-if="!player"
         key="entry-form"
         class="entry-form"
         novalidate
@@ -218,7 +233,8 @@ function handleSwitch() {
             :disabled="isSubmittingEntry"
             :aria-busy="isSubmittingEntry ? 'true' : 'false'"
           >
-            {{ isSubmittingEntry ? 'SAVING' : 'SAVE & PLAY' }}
+            <LoadingSpinner v-if="isSubmittingEntry" />
+            <span>{{ isSubmittingEntry ? 'SAVING' : 'SAVE & PLAY' }}</span>
           </button>
         </div>
       </form>
@@ -247,7 +263,8 @@ function handleSwitch() {
             :aria-busy="isSpinning ? 'true' : 'false'"
             @click="$emit('spin')"
           >
-            {{ isSpinning ? 'SPINNING' : 'SPIN WHEEL' }}
+            <LoadingSpinner v-if="isSpinning" />
+            <span>{{ isSpinning ? 'SPINNING' : 'SPIN WHEEL' }}</span>
           </button>
 
           <button
