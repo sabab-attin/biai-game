@@ -26,7 +26,7 @@ function formatTimestamp(isoString) {
         <div id="rules">
           <h2>HOW IT WORKS.</h2>
           <ol class="steps-list">
-            <li class="steps-list__item">
+            <li class="steps-list__item" data-reveal style="--i: 0">
               <div>
                 <h3 class="steps-list__title">SIGN IN WITH NAME AND CONTACT</h3>
                 <p class="steps-list__body">
@@ -34,7 +34,7 @@ function formatTimestamp(isoString) {
                 </p>
               </div>
             </li>
-            <li class="steps-list__item">
+            <li class="steps-list__item" data-reveal style="--i: 1">
               <div>
                 <h3 class="steps-list__title">SPIN THE PRIZE WHEEL</h3>
                 <p class="steps-list__body">
@@ -42,7 +42,7 @@ function formatTimestamp(isoString) {
                 </p>
               </div>
             </li>
-            <li class="steps-list__item">
+            <li class="steps-list__item" data-reveal style="--i: 2">
               <div>
                 <h3 class="steps-list__title">CLAIM WITH YOUR CODE</h3>
                 <p class="steps-list__body">
@@ -53,13 +53,13 @@ function formatTimestamp(isoString) {
           </ol>
         </div>
 
-        <div id="recent" class="well">
+        <div id="recent" class="well" data-reveal style="--i: 1">
           <div class="recent-head">
             <h3>RECENT WINNERS</h3>
             <span class="recent-sub">Live database feed</span>
           </div>
 
-          <ul v-if="recentSpins.length" class="recent-list">
+          <TransitionGroup v-if="recentSpins.length" name="winner-list" tag="ul" class="recent-list">
             <li v-for="item in recentSpins" :key="item.id" class="recent-item">
               <span class="recent-item__name">{{ item.firstName }}</span>
               <span class="recent-item__prize">{{ item.prizeTitle }}</span>
@@ -67,7 +67,7 @@ function formatTimestamp(isoString) {
                 {{ formatTimestamp(item.spunAt) }}
               </time>
             </li>
-          </ul>
+          </TransitionGroup>
 
           <p v-else class="empty-state">
             No spins recorded yet. Enter your details above to take the first spin.

@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 import {
   enterPlayer,
   fetchCurrentPlayer,
@@ -86,6 +86,7 @@ const entryErrorField = ref(null);
 const spinTrigger = ref(null);
 const adminOpen = ref(false);
 const entryPanelRef = ref(null);
+let revealObserver = null;
 
 async function refreshPublicData() {
   try {
@@ -98,6 +99,24 @@ async function refreshPublicData() {
 }
 
 onMounted(async () => {
+  const revealTargets = document.querySelectorAll('[data-reveal]');
+  if (typeof IntersectionObserver !== 'undefined') {
+    revealObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-in');
+            revealObserver?.unobserve(entry.target);
+          }
+        }
+      },
+      { rootMargin: '0px 0px -8% 0px' }
+    );
+    revealTargets.forEach((el) => revealObserver.observe(el));
+  } else {
+    revealTargets.forEach((el) => el.classList.add('is-in'));
+  }
+
   try {
     const prizeData = await fetchPrizes();
     if (Array.isArray(prizeData?.prizes) && prizeData.prizes.length) {
@@ -119,6 +138,10 @@ onMounted(async () => {
       localStorage.removeItem(TOKEN_KEY);
     }
   }
+});
+
+onBeforeUnmount(() => {
+  revealObserver?.disconnect();
 });
 
 async function handleEnter(formData) {

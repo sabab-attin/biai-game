@@ -1108,3 +1108,123 @@
     font-weight: 500;
   }
 }
+
+/* Progressive Reveals, State Transitions & Micro-Animations */
+.js [data-reveal] {
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity var(--dur-long) var(--ease-out),
+    transform var(--dur-long) var(--ease-out);
+  transition-delay: calc(var(--i, 0) * 55ms);
+}
+
+.js [data-reveal].is-in {
+  opacity: 1;
+  transform: none;
+}
+
+.js .panel-swap-enter-active,
+.js .panel-swap-leave-active {
+  transition:
+    opacity var(--dur-short) var(--ease-out),
+    transform var(--dur-short) var(--ease-out);
+}
+
+.js .panel-swap-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.js .panel-swap-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.js .winner-list-enter-active {
+  transition:
+    opacity var(--dur-long) var(--ease-out),
+    transform var(--dur-long) var(--ease-out);
+}
+
+.js .winner-list-enter-from {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+@keyframes ticket-stamp-pop {
+  0% {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.ticket-prize {
+  animation: ticket-stamp-pop var(--dur-long) var(--ease-out) both;
+}
+
+@keyframes hub-ready-pop {
+  0% {
+    transform: translate(-50%, -50%) scale(0.94);
+  }
+  65% {
+    transform: translate(-50%, -50%) scale(1.07);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.wheel-hub--ready {
+  animation: hub-ready-pop var(--dur-long) var(--ease-out) both;
+}
+
+@keyframes dialog-settle {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.carnival-dialog[open] {
+  animation: dialog-settle var(--dur-short) var(--ease-out) both;
+}
+
+.program-card {
+  transition:
+    transform var(--dur-short) var(--ease-out),
+    box-shadow var(--dur-short) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .program-card:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: var(--shadow-card-lg);
+  }
+
+  .prize-row:not(.prize-row--won):hover {
+    background: var(--color-paper-2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .js [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .ticket-prize,
+  .wheel-hub--ready,
+  .carnival-dialog[open] {
+    animation: none;
+  }
+}

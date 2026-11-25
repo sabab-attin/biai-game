@@ -42,7 +42,13 @@ const PROGRAMS = [
       </div>
 
       <div class="programs-grid">
-        <article v-for="program in PROGRAMS" :key="program.name" class="program-card">
+        <article
+          v-for="(program, idx) in PROGRAMS"
+          :key="program.name"
+          class="program-card"
+          data-reveal
+          :style="{ '--i': idx }"
+        >
           <div class="program-card__head">
             <h3>{{ program.name }}</h3>
             <span class="program-card__meta">{{ program.schedule }}</span>

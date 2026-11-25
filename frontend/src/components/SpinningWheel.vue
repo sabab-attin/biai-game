@@ -38,6 +38,8 @@ const activeSliceIndex = ref(0);
 const soundEnabled = ref(true);
 
 let rafId = null;
+let confettiRafId = null;
+let confettiPieces = [];
 let resizeObserver = null;
 let pointerResetTimer = null;
 
@@ -157,6 +159,79 @@ function drawWheel() {
     ctx.strokeStyle = ink;
     ctx.stroke();
   }
+
+  // Celebratory confetti overlay when active
+  if (confettiPieces.length) {
+    for (const piece of confettiPieces) {
+      ctx.save();
+      ctx.translate(piece.x * size, piece.y * size);
+      ctx.rotate(piece.rot);
+      ctx.globalAlpha = piece.alpha;
+      ctx.fillStyle = piece.color;
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = 1.25;
+      ctx.fillRect(-piece.w / 2, -piece.h / 2, piece.w, piece.h);
+      ctx.strokeRect(-piece.w / 2, -piece.h / 2, piece.w, piece.h);
+      ctx.restore();
+    }
+  }
+}
+
+function launchConfetti() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (confettiRafId) cancelAnimationFrame(confettiRafId);
+
+  const palette = [
+    readCssToken('--color-accent'),
+    readCssToken('--color-accent-2'),
+    readCssToken('--color-navy'),
+    readCssToken('--color-paper'),
+    readCssToken('--color-biai-mark'),
+  ].filter(Boolean);
+
+  confettiPieces = Array.from({ length: 42 }, (_, idx) => {
+    const angle = (Math.PI * 2 * idx) / 42 + (Math.random() - 0.5) * 0.25;
+    const speed = 0.0045 + Math.random() * 0.007;
+    return {
+      x: 0.5,
+      y: 0.5,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 0.0025,
+      rot: Math.random() * Math.PI * 2,
+      vrot: (Math.random() - 0.5) * 0.22,
+      w: 8 + Math.random() * 6,
+      h: 5 + Math.random() * 5,
+      color: palette[idx % palette.length],
+      alpha: 1,
+    };
+  });
+
+  const start = performance.now();
+  const duration = 1450;
+
+  function step(now) {
+    const elapsed = now - start;
+    const progress = Math.min(1, elapsed / duration);
+    for (const piece of confettiPieces) {
+      piece.x += piece.vx;
+      piece.y += piece.vy;
+      piece.vy += 0.00022;
+      piece.vx *= 0.985;
+      piece.rot += piece.vrot;
+      piece.alpha = progress > 0.65 ? Math.max(0, (1 - progress) / 0.35) : 1;
+    }
+    drawWheel();
+
+    if (progress < 1) {
+      confettiRafId = requestAnimationFrame(step);
+    } else {
+      confettiRafId = null;
+      confettiPieces = [];
+      drawWheel();
+    }
+  }
+
+  confettiRafId = requestAnimationFrame(step);
 }
 
 function triggerPegTick() {
@@ -221,6 +296,7 @@ function animateToSegment(targetIndex, resultPayload) {
       rafId = null;
       pointerTilt.value = 0;
       if (soundEnabled.value) playWinFanfare();
+      launchConfetti();
       emit('spinComplete', resultPayload);
     }
   }
@@ -277,6 +353,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (rafId) cancelAnimationFrame(rafId);
+  if (confettiRafId) cancelAnimationFrame(confettiRafId);
   clearTimeout(pointerResetTimer);
   resizeObserver?.disconnect();
 });
@@ -312,6 +389,7 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="wheel-hub"
+          :class="{ 'wheel-hub--ready': isLoggedIn && canSpin && !isSpinning }"
           :disabled="isSpinning || (isLoggedIn && !canSpin)"
           :aria-label="
             isLoggedIn
