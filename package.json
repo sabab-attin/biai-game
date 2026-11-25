@@ -1,0 +1,15 @@
+{
+  "name": "carnival-prize-wheel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Carnival-themed responsive spinning wheel prize game with Vue 3, Express, MongoDB, and CSV persistence.",
+  "scripts": {
+    "dev": "concurrently -n API,WEB -c red,yellow \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
+    "build": "npm --prefix frontend run build",
+    "start": "npm --prefix backend start",
+    "test": "npm --prefix backend test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
