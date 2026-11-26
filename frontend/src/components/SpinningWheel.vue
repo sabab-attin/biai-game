@@ -23,6 +23,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  notice: {
+    type: Object,
+    default: null,
+  },
 });
 
 const emit = defineEmits(['hubClick', 'spinComplete']);
@@ -408,5 +412,14 @@ onBeforeUnmount(() => {
         <span>{{ soundEnabled ? 'Sound on' : 'Muted' }}</span>
       </button>
     </div>
+
+    <p
+      v-if="notice"
+      class="wheel-notice wheel-notice--inline"
+      :class="`wheel-notice--${notice.tone}`"
+      aria-live="polite"
+    >
+      {{ notice.text }}
+    </p>
   </div>
 </template>

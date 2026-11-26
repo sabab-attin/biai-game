@@ -147,6 +147,19 @@ cd ../frontend
 npm run build
 ```
 
+## Deploy on Vercel
+
+This repository is configured as a single full-stack Vercel project using [vercel.json](./vercel.json) (static Vue build from `frontend/dist` and serverless Express API at [api/index.mjs](./api/index.mjs)):
+
+1. Import the GitHub repository into **Vercel** with the **Root Directory** set to `.` (default).
+2. Add a hosted **MongoDB Atlas** database (allow Vercel access in Atlas **Network Access**, e.g. `0.0.0.0/0`).
+3. Set these **Environment Variables** in Vercel Project Settings:
+   - `MONGODB_URI`: your MongoDB Atlas connection string
+   - `SESSION_SECRET`: a long random secret string
+   - `ADMIN_USERNAMES`: `biai`
+   - `ADMIN_PASSWORD`: your admin password (or provide `ADMIN_PASSWORD_HASH`)
+4. Deploy. All `/api/*` routes (including `/api/admin/*` CSV exports via `/tmp` rebuilt from MongoDB) and client routes are handled automatically on the same domain.
+
 Backend tests cover:
 
 - Contact details being required only at claim time, and optional email

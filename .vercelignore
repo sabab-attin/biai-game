@@ -1,0 +1,10 @@
+.git/
+.hallmark/
+.logs/
+.pids/
+node_modules/
+frontend/dist/
+backend/.env
+backend/data/*.csv
+backend/data/*.tmp
+backend/backups/

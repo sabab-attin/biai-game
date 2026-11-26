@@ -1,44 +1,21 @@
 import mongoose from 'mongoose';
 import { createApp } from './app.js';
+import { connectDatabase, initDatabaseAndAdmin } from './bootstrap.js';
 import { loadConfig } from './config/env.js';
-import { Admin } from './models/Admin.js';
-import { AdminAudit } from './models/AdminAudit.js';
-import { Player } from './models/Player.js';
-import { Record } from './models/Record.js';
-import { ensureAdminSeed } from './services/adminAuth.js';
 import {
   createShutdownSnapshot,
   ensureCsvHealthy,
-  rebuildCsvFromMongo,
   startCsvScheduler,
 } from './services/csvStore.js';
 import { restoreRecordsIfEmpty } from './services/recordStore.js';
-import { withRetry } from './services/retry.js';
 
 async function start() {
   const config = loadConfig();
 
-  await withRetry(
-    () =>
-      mongoose.connect(config.mongodbUri, {
-        serverSelectionTimeoutMS: 5000,
-      }),
-    { attempts: 5, baseDelayMs: 500, label: 'connect to MongoDB' }
-  );
+  await connectDatabase(config);
   console.log(`Connected to MongoDB at ${config.mongodbUri}`);
 
-  await Promise.all([Record.init(), Admin.init(), AdminAudit.init()]);
-  await ensureAdminSeed(config);
-
-  // Guest mode has been removed; clear any guest rows left by older builds.
-  const removedGuests = await Record.deleteMany({ source: 'guest' });
-  const removedGuestPlayers = await Player.collection.deleteMany({ isGuest: true });
-  if (removedGuests.deletedCount || removedGuestPlayers.deletedCount) {
-    console.log(
-      `[records] Removed ${removedGuests.deletedCount} guest record(s) and ${removedGuestPlayers.deletedCount} guest player(s).`
-    );
-    await rebuildCsvFromMongo(config, { snapshot: true });
-  }
+  await initDatabaseAndAdmin(config, { rebuildCsvOnPurge: true });
 
   const restored = await restoreRecordsIfEmpty(config);
   if (restored.restored) {

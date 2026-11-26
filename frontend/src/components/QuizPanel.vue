@@ -5,6 +5,13 @@ import { answerQuiz, finishQuiz, startQuiz } from '../api/client.js';
 const emit = defineEmits(['back', 'finished']);
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
+const QUIZ_REWARD_TIERS = [
+  { score: 1, title: 'Stickers' },
+  { score: 2, title: '10% Off' },
+  { score: 3, title: '25% Off' },
+  { score: 4, title: '50% Off' },
+  { score: 5, title: 'Free Course' },
+];
 
 const questions = ref([]);
 const quizToken = ref('');
@@ -17,6 +24,7 @@ const isLoading = ref(true);
 const isSubmitting = ref(false);
 const errorMsg = ref('');
 const finalScore = ref(null);
+const wonPrize = ref(null);
 const total = ref(5);
 
 const currentQuestion = computed(() => questions.value[currentIndex.value] || null);
@@ -28,6 +36,7 @@ async function loadQuiz() {
   isLoading.value = true;
   errorMsg.value = '';
   finalScore.value = null;
+  wonPrize.value = null;
   questions.value = [];
   currentIndex.value = 0;
   selectedOptionId.value = null;
@@ -98,6 +107,7 @@ async function nextQuestion() {
     });
     finalScore.value = result.score;
     total.value = result.total;
+    wonPrize.value = result.prize || null;
     emit('finished', result);
   } catch (error) {
     errorMsg.value = error.message || 'Could not save your quiz score.';
@@ -153,10 +163,16 @@ onMounted(loadQuiz);
         ></span>
       </div>
       <p class="quiz-result__score">{{ finalScore }}<span>/{{ total }}</span></p>
-      <p class="quiz-result__body">
-        Add your details to save this score and hear about quiz prizes.
+      <p v-if="wonPrize" class="quiz-result__body">
+        Gift unlocked: <strong>{{ wonPrize.title }}</strong>. Add your details in the claim popup to save it.
+      </p>
+      <p v-else class="quiz-result__body">
+        No gift unlocked this round. Play again — get 1 correct for Stickers up to 5/5 for a Free Course!
       </p>
       <div class="quiz-result__actions">
+        <button v-if="finalScore === 0" type="button" class="btn btn--primary" @click="loadQuiz">
+          PLAY AGAIN
+        </button>
         <button type="button" class="btn quiz-back-btn" @click="$emit('back')">BACK TO GAMES</button>
       </div>
     </div>
@@ -185,6 +201,21 @@ onMounted(loadQuiz);
           :class="{ 'quiz-segment--active': idx <= currentIndex }"
         ></span>
       </div>
+
+      <ul class="quiz-reward-ladder" aria-label="Quiz prize tiers by correct answers">
+        <li
+          v-for="tier in QUIZ_REWARD_TIERS"
+          :key="tier.score"
+          class="quiz-reward-tier"
+          :class="{
+            'quiz-reward-tier--unlocked': runningScore >= tier.score,
+            'quiz-reward-tier--current': runningScore === tier.score,
+          }"
+        >
+          <span class="quiz-reward-tier__score">{{ tier.score }}/{{ total }}</span>
+          <span class="quiz-reward-tier__name">{{ tier.title }}</span>
+        </li>
+      </ul>
 
       <div class="quiz-question-block">
         <div class="quiz-question-block__meta">

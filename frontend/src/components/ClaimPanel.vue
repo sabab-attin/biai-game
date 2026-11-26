@@ -32,14 +32,37 @@ const form = reactive({
   email: '',
 });
 
+const hasPrizeReveal = () => Boolean(props.result?.prizeTitle);
+const isWheel = () => props.result?.game === 'wheel';
+
+const step = ref(hasPrizeReveal() ? 'reveal' : 'form');
 const localError = ref('');
 const localField = ref(null);
 
 const nameInputRef = ref(null);
 const phoneInputRef = ref(null);
 const emailInputRef = ref(null);
+const claimCtaRef = ref(null);
 
-const isWheel = () => props.result?.game === 'wheel';
+function focusActiveControl() {
+  if (props.saved) return;
+  if (hasPrizeReveal() && step.value === 'reveal') {
+    claimCtaRef.value?.focus();
+  } else {
+    nameInputRef.value?.focus();
+  }
+}
+
+watch(
+  () => props.result,
+  async (val) => {
+    step.value = val?.prizeTitle ? 'reveal' : 'form';
+    localError.value = '';
+    localField.value = null;
+    await nextTick();
+    focusActiveControl();
+  }
+);
 
 watch(
   () => props.error,
@@ -58,19 +81,16 @@ watch(
   }
 );
 
-watch(
-  () => props.saved,
-  async (val) => {
-    if (val) return;
-    await nextTick();
-    nameInputRef.value?.focus();
-  }
-);
-
 onMounted(async () => {
   await nextTick();
-  nameInputRef.value?.focus();
+  focusActiveControl();
 });
+
+function openClaimForm() {
+  step.value = 'form';
+  localError.value = '';
+  localField.value = null;
+}
 
 function handleSubmit() {
   const name = form.name.trim();
@@ -121,20 +141,22 @@ function clearFieldError(field) {
 
 <template>
   <div class="claim-overlay">
-    <section
-      class="claim-panel"
-      role="dialog"
-      aria-modal="true"
-      :aria-labelledby="saved ? 'claim-saved-title' : 'claim-title'"
-    >
-      <template v-if="saved">
-        <p class="claim-panel__eyebrow">{{ isWheel() ? 'Prize claimed' : 'Score saved' }}</p>
+    <Transition name="panel-swap" mode="out-in" @after-enter="focusActiveControl">
+      <section
+        v-if="saved"
+        key="saved"
+        class="claim-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="claim-saved-title"
+      >
+        <p class="claim-panel__eyebrow">{{ hasPrizeReveal() ? 'Prize claimed' : 'Score saved' }}</p>
         <h2 id="claim-saved-title" class="claim-panel__title">
-          {{ isWheel() ? 'YOU’RE IN.' : 'NICE WORK.' }}
+          {{ hasPrizeReveal() ? 'YOU’RE IN.' : 'NICE WORK.' }}
         </h2>
         <p class="claim-panel__lead">
           {{
-            isWheel()
+            hasPrizeReveal()
               ? 'Your prize is saved. Show this confirmation at the BIAI booth to collect it.'
               : 'Your quiz result is saved. We will contact you if you qualify for a prize.'
           }}
@@ -149,15 +171,13 @@ function clearFieldError(field) {
             <dt>Phone</dt>
             <dd>{{ saved.record?.phone || saved.player?.phone || '—' }}</dd>
           </div>
-          <div class="player-meta__item">
-            <dt>{{ isWheel() ? 'Prize' : 'Score' }}</dt>
-            <dd>
-              {{
-                isWheel()
-                  ? saved.record?.reward || result.prizeTitle || '—'
-                  : `${saved.score ?? result.score}/${saved.total ?? result.total}`
-              }}
-            </dd>
+          <div v-if="!isWheel()" class="player-meta__item">
+            <dt>Quiz score</dt>
+            <dd>{{ `${saved.score ?? result.score}/${saved.total ?? result.total}` }}</dd>
+          </div>
+          <div v-if="hasPrizeReveal()" class="player-meta__item">
+            <dt>Prize</dt>
+            <dd>{{ saved.prizeTitle || saved.record?.reward || result.prizeTitle || '—' }}</dd>
           </div>
         </dl>
 
@@ -169,18 +189,81 @@ function clearFieldError(field) {
             BACK TO GAMES
           </button>
         </div>
-      </template>
+      </section>
 
-      <template v-else>
-        <p class="claim-panel__eyebrow">Winner check-in</p>
+      <section
+        v-else-if="hasPrizeReveal() && step === 'reveal'"
+        key="reveal"
+        class="claim-panel claim-panel--reveal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="claim-reveal-title"
+      >
+        <span class="claim-panel__shockwave" aria-hidden="true"></span>
+        <p class="claim-panel__eyebrow">
+          {{
+            isWheel()
+              ? 'Congratulations · Prize unlocked'
+              : `Quiz score ${result.score}/${result.total} · Prize unlocked`
+          }}
+        </p>
+        <h2 id="claim-reveal-title" class="claim-panel__title">YOU WON!</h2>
+
+        <div class="claim-prize-card">
+          <span v-if="result.prizeCategory" class="claim-prize-card__tag">
+            {{ result.prizeCategory }}
+          </span>
+          <p class="claim-prize-card__name">{{ result.prizeTitle }}</p>
+          <p v-if="result.prizeDescription" class="claim-prize-card__desc">
+            {{ result.prizeDescription }}
+          </p>
+        </div>
+
+        <p class="claim-panel__lead">
+          <template v-if="isWheel()">
+            Your spin landed on <strong>{{ result.prizeTitle }}</strong>! Tap below to enter your
+            details and claim this gift.
+          </template>
+          <template v-else>
+            You got <strong>{{ result.score }}/{{ result.total }}</strong> right and unlocked
+            <strong>{{ result.prizeTitle }}</strong>! Tap below to enter your details and claim this gift.
+          </template>
+        </p>
+
+        <div class="btn-pair">
+          <button
+            ref="claimCtaRef"
+            type="button"
+            class="btn btn--primary"
+            @click="openClaimForm"
+          >
+            CLAIM YOUR PRIZE →
+          </button>
+          <button type="button" class="btn" @click="emit('backToGames')">
+            BACK TO GAMES
+          </button>
+        </div>
+      </section>
+
+      <section
+        v-else
+        key="form"
+        class="claim-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="claim-title"
+      >
+        <p class="claim-panel__eyebrow">
+          {{ hasPrizeReveal() ? 'Claim your gift' : 'Winner check-in' }}
+        </p>
         <h2 id="claim-title" class="claim-panel__title">
-          <template v-if="isWheel()">YOU WON {{ result.prizeTitle }}.</template>
+          <template v-if="hasPrizeReveal()">CLAIM {{ result.prizeTitle }}.</template>
           <template v-else>YOU SCORED {{ result.score }}/{{ result.total }}.</template>
         </h2>
         <p class="claim-panel__lead">
           {{
-            isWheel()
-              ? 'Add your details so we can save this prize and tell you how to collect it.'
+            hasPrizeReveal()
+              ? 'Add your details so we can save your gift and arrange collection.'
               : 'Add your details so we can save your score and contact you about quiz prizes.'
           }}
         </p>
@@ -288,7 +371,7 @@ function clearFieldError(field) {
             </button>
           </div>
         </form>
-      </template>
-    </section>
+      </section>
+    </Transition>
   </div>
 </template>

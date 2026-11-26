@@ -1,7 +1,11 @@
 node_modules/
 dist/
 frontend/dist/
+.env
+.env.*
 backend/.env
+backend/.env.*
+!backend/.env.example
 backend/data/*.csv
 backend/data/*.tmp
 backend/backups/
