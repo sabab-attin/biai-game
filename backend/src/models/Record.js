@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-export const RECORD_SOURCES = Object.freeze(['wheel', 'quiz', 'dart', 'guest']);
+export const RECORD_SOURCES = Object.freeze(['wheel', 'quiz', 'dart']);
 
 const recordSchema = new mongoose.Schema(
   {

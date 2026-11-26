@@ -1,6 +1,5 @@
 import crypto from 'node:crypto';
 
-const PLAYER_TOKEN_TTL_MS = 1000 * 60 * 60 * 24;
 const ADMIN_TOKEN_TTL_MS = 1000 * 60 * 60 * 8;
 const QUIZ_TOKEN_TTL_MS = 1000 * 60 * 60 * 2;
 
@@ -41,15 +40,6 @@ function verifyPayload(token, secret) {
   }
 }
 
-export function createPlayerToken(playerId, secret) {
-  return signPayload({ pid: String(playerId), exp: Date.now() + PLAYER_TOKEN_TTL_MS }, secret);
-}
-
-export function verifyPlayerToken(token, secret) {
-  const payload = verifyPayload(token, secret);
-  return payload?.pid || null;
-}
-
 export function createAdminToken(adminId, role, secret) {
   return signPayload(
     {
@@ -70,10 +60,9 @@ export function verifyAdminToken(token, secret) {
   return payload;
 }
 
-export function createQuizToken({ playerId, questionIds, quizId }, secret) {
+export function createQuizToken({ questionIds, quizId }, secret) {
   return signPayload(
     {
-      pid: String(playerId),
       qids: questionIds,
       quizId,
       kind: 'quiz',
@@ -88,7 +77,6 @@ export function verifyQuizToken(token, secret) {
   if (
     !payload ||
     payload.kind !== 'quiz' ||
-    !payload.pid ||
     !Array.isArray(payload.qids) ||
     !payload.quizId
   ) {

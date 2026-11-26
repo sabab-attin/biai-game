@@ -11,10 +11,6 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  isLoggedIn: {
-    type: Boolean,
-    default: false,
-  },
   wonPrizeId: {
     type: String,
     default: '',
@@ -383,15 +379,9 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="wheel-hub"
-          :class="{ 'wheel-hub--ready': isLoggedIn && canSpin && !isSpinning }"
-          :disabled="isSpinning || (isLoggedIn && !canSpin)"
-          :aria-label="
-            isLoggedIn
-              ? canSpin
-                ? 'Spin the prize wheel'
-                : 'Spin complete'
-              : 'Focus entry form to sign in before spinning'
-          "
+          :class="{ 'wheel-hub--ready': canSpin && !isSpinning }"
+          :disabled="isSpinning || !canSpin"
+          :aria-label="canSpin ? 'Spin the prize wheel' : 'Please wait for the wheel'"
           @click="$emit('hubClick')"
         >
           SPIN

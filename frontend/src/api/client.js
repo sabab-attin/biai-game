@@ -28,61 +28,35 @@ export function fetchPrizes() {
   return request('/prizes');
 }
 
-export function enterPlayer(data) {
-  return request('/players/enter', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-export function enterAsGuest() {
-  return request('/players/guest', {
+export function spinWheel() {
+  return request('/play/wheel/spin', {
     method: 'POST',
   });
 }
 
-export function fetchCurrentPlayer(token) {
-  return request('/players/me', {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+export function startQuiz() {
+  return request('/play/quiz/start', {
+    method: 'POST',
   });
 }
 
-export function spinWheel(token) {
-  return request('/wheel/spin', {
+export function answerQuiz(payload) {
+  return request('/play/quiz/answer', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-}
-
-export function startQuiz(token) {
-  return request('/quiz/start', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-}
-
-export function answerQuiz(token, payload) {
-  return request('/quiz/answer', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
     body: JSON.stringify(payload),
   });
 }
 
-export function finishQuiz(token, payload) {
-  return request('/quiz/finish', {
+export function finishQuiz(payload) {
+  return request('/play/quiz/finish', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function claimPlay(payload) {
+  return request('/play/claim', {
+    method: 'POST',
     body: JSON.stringify(payload),
   });
 }

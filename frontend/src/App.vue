@@ -1,22 +1,14 @@
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
-import {
-  enterAsGuest,
-  enterPlayer,
-  fetchCurrentPlayer,
-  fetchPrizes,
-  spinWheel,
-} from './api/client.js';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { claimPlay, fetchPrizes, spinWheel } from './api/client.js';
 import { ADMIN_HASH_BASE } from './admin/path.js';
 import BiaiCoursesMarquee from './components/BiaiCoursesMarquee.vue';
 import ChoiceScreen from './components/ChoiceScreen.vue';
-import EntryPanel from './components/EntryPanel.vue';
+import ClaimPanel from './components/ClaimPanel.vue';
 import NavBar from './components/NavBar.vue';
 import PrizeLedger from './components/PrizeLedger.vue';
 import QuizPanel from './components/QuizPanel.vue';
 import SpinningWheel from './components/SpinningWheel.vue';
-
-const TOKEN_KEY = 'carnival_wheel_token';
 
 const FALLBACK_PRIZES = [
   {
@@ -103,19 +95,26 @@ const FALLBACK_PRIZES = [
 ];
 
 const prizes = ref(FALLBACK_PRIZES);
-const player = ref(null);
-const sessionToken = ref('');
 const stage = ref('landing');
-const selectedIntent = ref('wheel');
+const chosenGame = ref('');
+const quizKey = ref(0);
 
-const isSubmittingEntry = ref(false);
 const isSpinning = ref(false);
-const spinAgain = ref(false);
-const entryError = ref('');
-const entryErrorField = ref(null);
 const spinTrigger = ref(null);
-const entryPanelRef = ref(null);
+const wheelNotice = ref(null);
+const wheelLandedPrizeId = ref('');
+
+const claimResult = ref(null);
+const claimSaved = ref(null);
+const claimSubmitting = ref(false);
+const claimError = ref('');
+const claimErrorField = ref(null);
+
 let revealObserver = null;
+
+const canSpin = computed(
+  () => stage.value === 'wheel' && !isSpinning.value && !claimResult.value
+);
 
 onMounted(async () => {
   const revealTargets = document.querySelectorAll('[data-reveal]');
@@ -144,79 +143,48 @@ onMounted(async () => {
   } catch {
     // Fallback prizes keep the wheel rendered cleanly
   }
-
-  const savedToken = localStorage.getItem(TOKEN_KEY);
-  if (savedToken) {
-    try {
-      const me = await fetchCurrentPlayer(savedToken);
-      sessionToken.value = savedToken;
-      player.value = me.player;
-      stage.value = 'landing';
-    } catch {
-      localStorage.removeItem(TOKEN_KEY);
-    }
-  }
 });
 
 onBeforeUnmount(() => {
   revealObserver?.disconnect();
+  document.body.style.overflow = '';
 });
 
-async function handleEnter(formData) {
-  isSubmittingEntry.value = true;
-  entryError.value = '';
-  entryErrorField.value = null;
+watch(claimResult, (value) => {
+  document.body.style.overflow = value ? 'hidden' : '';
+});
 
-  try {
-    const data = await enterPlayer(formData);
-    sessionToken.value = data.token;
-    localStorage.setItem(TOKEN_KEY, data.token);
-    player.value = data.player;
-    spinAgain.value = false;
-    stage.value = selectedIntent.value || 'wheel';
-  } catch (error) {
-    entryError.value = error.message || 'Could not save entry.';
-    entryErrorField.value = error.field || null;
-  } finally {
-    isSubmittingEntry.value = false;
-  }
+function resetClaim() {
+  claimResult.value = null;
+  claimSaved.value = null;
+  claimSubmitting.value = false;
+  claimError.value = '';
+  claimErrorField.value = null;
 }
 
-async function handleGuest() {
-  isSubmittingEntry.value = true;
-  entryError.value = '';
-  entryErrorField.value = null;
-
-  try {
-    const data = await enterAsGuest();
-    sessionToken.value = data.token;
-    localStorage.setItem(TOKEN_KEY, data.token);
-    player.value = data.player;
-    spinAgain.value = false;
-    stage.value = selectedIntent.value || 'wheel';
-  } catch (error) {
-    entryError.value = error.message || 'Could not start a guest session.';
-  } finally {
-    isSubmittingEntry.value = false;
-  }
+function resetRound() {
+  spinTrigger.value = null;
+  wheelNotice.value = null;
+  wheelLandedPrizeId.value = '';
+  isSpinning.value = false;
+  resetClaim();
 }
 
-function handleSelectGame(game) {
-  selectedIntent.value = game;
-  entryError.value = '';
-  entryErrorField.value = null;
-
-  if (player.value) {
-    stage.value = game;
+function startGame(game) {
+  chosenGame.value = game;
+  resetRound();
+  if (game === 'quiz') {
+    quizKey.value += 1;
+    stage.value = 'quiz';
     return;
   }
-  stage.value = 'entry';
+  stage.value = 'wheel';
 }
 
 async function handleGoHome(selector = '') {
-  entryError.value = '';
-  entryErrorField.value = null;
+  resetRound();
   stage.value = 'landing';
+  chosenGame.value = '';
   await nextTick();
   if (selector && selector !== '#top') {
     document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -225,62 +193,107 @@ async function handleGoHome(selector = '') {
   }
 }
 
-function handleBackToLanding() {
-  entryError.value = '';
-  entryErrorField.value = null;
+function handleBackToGames() {
+  resetRound();
   stage.value = 'landing';
+  chosenGame.value = '';
 }
 
 async function handleSpin() {
-  if (!player.value || player.value.spinsRemaining <= 0 || isSpinning.value) return;
+  if (!canSpin.value) return;
 
   isSpinning.value = true;
-  spinAgain.value = false;
-  entryError.value = '';
+  spinTrigger.value = null;
+  wheelNotice.value = null;
+  wheelLandedPrizeId.value = '';
+  resetClaim();
 
   try {
-    const result = await spinWheel(sessionToken.value);
+    const result = await spinWheel();
     spinTrigger.value = { ...result, nonce: Date.now() };
   } catch (error) {
     isSpinning.value = false;
-    if (error.payload?.player) {
-      player.value = error.payload.player;
-    } else {
-      entryError.value = error.message || 'Spin could not be completed.';
-    }
-  }
-}
-
-function handleHubClick() {
-  if (!player.value) {
-    entryPanelRef.value?.focusNameInput();
-    return;
-  }
-  if (stage.value !== 'wheel') {
-    stage.value = 'wheel';
-    return;
-  }
-  if (player.value.spinsRemaining > 0 && !isSpinning.value) {
-    handleSpin();
+    wheelNotice.value = {
+      tone: 'error',
+      text: error.message || 'The wheel could not spin. Please try again.',
+    };
   }
 }
 
 function handleSpinComplete(result) {
-  player.value = result.player;
+  if (stage.value !== 'wheel') return;
+
   isSpinning.value = false;
-  spinAgain.value = Boolean(result.spinAgain);
+
+  if (result.claimable) {
+    wheelLandedPrizeId.value = result.prize?.id || '';
+    claimResult.value = {
+      game: 'wheel',
+      playId: result.playId,
+      prizeId: result.prize?.id || '',
+      prizeTitle: result.prize?.title || 'a prize',
+      claimCode: result.claimCode || '',
+      segmentIndex: result.segmentIndex,
+    };
+    return;
+  }
+
+  wheelLandedPrizeId.value = '';
+
+  if (result.spinAgain) {
+    wheelNotice.value = {
+      tone: 'again',
+      text: 'Spin Again! You get another free turn.',
+    };
+    return;
+  }
+
+  wheelNotice.value = {
+    tone: 'none',
+    text: 'No prize this time. Give it another spin.',
+  };
 }
 
-function handleSwitchPlayer() {
-  localStorage.removeItem(TOKEN_KEY);
-  sessionToken.value = '';
-  player.value = null;
-  spinTrigger.value = null;
-  spinAgain.value = false;
-  selectedIntent.value = 'wheel';
-  stage.value = 'landing';
-  entryError.value = '';
-  entryErrorField.value = null;
+function handleQuizFinished(result) {
+  if (stage.value !== 'quiz') return;
+
+  claimResult.value = {
+    game: 'quiz',
+    playId: result.playId,
+    score: result.score,
+    total: result.total,
+  };
+}
+
+async function handleClaim(payload) {
+  if (!claimResult.value || claimSubmitting.value) return;
+
+  claimSubmitting.value = true;
+  claimError.value = '';
+  claimErrorField.value = null;
+
+  try {
+    const saved = await claimPlay({
+      playId: claimResult.value.playId,
+      ...payload,
+    });
+    claimSaved.value = saved;
+  } catch (error) {
+    claimError.value = error.message || 'Could not save your details. Please try again.';
+    claimErrorField.value = error.field || null;
+  } finally {
+    claimSubmitting.value = false;
+  }
+}
+
+function handlePlayAgain() {
+  const game = chosenGame.value || claimResult.value?.game || 'wheel';
+  startGame(game);
+}
+
+function handleHubClick() {
+  if (stage.value !== 'wheel') return;
+  handleSpin();
 }
 </script>
 
@@ -293,93 +306,65 @@ function handleSwitchPlayer() {
     <section v-if="stage === 'landing'" class="landing-section" aria-label="Choose a game">
       <div class="container">
         <ChoiceScreen
-          :player="player"
-          @quiz="handleSelectGame('quiz')"
-          @wheel="handleSelectGame('wheel')"
-          @switch="handleSwitchPlayer"
-        />
-      </div>
-    </section>
-
-    <section v-else-if="stage === 'entry'" class="entry-section" aria-label="Player sign in">
-      <div class="container entry-section__inner">
-        <button
-          type="button"
-          class="btn btn--compact entry-section__back"
-          @click="handleBackToLanding"
-        >
-          ← BACK TO GAMES
-        </button>
-
-        <p class="entry-section__eyebrow">
-          {{ selectedIntent === 'quiz' ? 'Quiz entry' : 'Wheel entry' }}
-        </p>
-        <h1 class="entry-section__title">
-          {{ selectedIntent === 'quiz' ? 'SIGN IN TO PLAY.' : 'SIGN IN TO SPIN.' }}
-        </h1>
-        <p class="entry-section__lead">
-          {{
-            selectedIntent === 'quiz'
-              ? 'Enter your details to start the five-question AI literacy quiz.'
-              : 'Enter your details to unlock your turn at the prize wheel.'
-          }}
-        </p>
-
-        <EntryPanel
-          ref="entryPanelRef"
-          :player="player"
-          :is-submitting-entry="isSubmittingEntry"
-          :is-spinning="isSpinning"
-          :spin-again="spinAgain"
-          :entry-error="entryError"
-          :entry-error-field="entryErrorField"
-          @enter="handleEnter"
-          @guest="handleGuest"
-          @spin="handleSpin"
-          @switch-player="handleSwitchPlayer"
+          @quiz="startGame('quiz')"
+          @wheel="startGame('wheel')"
         />
       </div>
     </section>
 
     <section v-else-if="stage === 'quiz'" class="quiz-section" aria-label="AI literacy quiz">
       <div class="container">
-        <QuizPanel :token="sessionToken" @back="handleBackToLanding" />
+        <QuizPanel
+          :key="quizKey"
+          @back="handleBackToGames"
+          @finished="handleQuizFinished"
+        />
       </div>
     </section>
 
-    <section
-      v-else
-      class="hero"
-      :class="{ 'hero--entered': stage === 'wheel' && player }"
-      aria-label="BIAI prize wheel game"
-    >
+    <section v-else class="hero hero--entered" aria-label="BIAI prize wheel game">
       <div class="container hero__grid">
         <div class="hero__copy">
+          <p class="entry-section__eyebrow">Prize round</p>
           <h1>SPIN WITH BIAI.<br />CLAIM YOUR PRIZE.</h1>
           <p class="lead hero__lead">
-            Bangladesh’s first applied AI institute. Your ticket is ready.
+            No sign-up needed. Take your spin first — we only ask for your details if you win.
           </p>
 
-          <EntryPanel
-            ref="entryPanelRef"
-            :player="player"
-            :is-submitting-entry="isSubmittingEntry"
-            :is-spinning="isSpinning"
-            :spin-again="spinAgain"
-            :entry-error="entryError"
-            :entry-error-field="entryErrorField"
-            @enter="handleEnter"
-            @guest="handleGuest"
-            @spin="handleSpin"
-            @switch-player="handleSwitchPlayer"
-          />
+          <div class="btn-pair">
+            <button
+              type="button"
+              class="btn btn--primary"
+              :disabled="!canSpin"
+              :aria-busy="isSpinning ? 'true' : 'false'"
+              @click="handleSpin"
+            >
+              {{ isSpinning ? 'SPINNING…' : 'SPIN THE WHEEL' }}
+            </button>
+            <button type="button" class="btn" @click="handleBackToGames">
+              BACK TO GAMES
+            </button>
+          </div>
+
+          <p
+            v-if="wheelNotice"
+            class="wheel-notice"
+            :class="`wheel-notice--${wheelNotice.tone}`"
+            aria-live="polite"
+          >
+            {{ wheelNotice.text }}
+          </p>
+
+          <p class="form-consent">
+            Play first. Share your name and phone number only after you win so we can arrange
+            your prize. Email is optional.
+          </p>
         </div>
 
         <SpinningWheel
           :prizes="prizes"
-          :is-logged-in="Boolean(player)"
-          :can-spin="Boolean(player && player.spinsRemaining > 0)"
-          :won-prize-id="player?.prizeId || ''"
+          :can-spin="canSpin"
+          :won-prize-id="wheelLandedPrizeId"
           :spin-trigger="spinTrigger"
           :is-spinning="isSpinning"
           @hub-click="handleHubClick"
@@ -389,18 +374,30 @@ function handleSwitchPlayer() {
     </section>
 
     <button
-      v-if="stage === 'wheel' && player"
+      v-if="stage === 'wheel'"
       type="button"
       class="btn btn--compact game-home-fab"
-      @click="handleBackToLanding"
+      @click="handleBackToGames"
     >
       ← GAMES
     </button>
 
+    <ClaimPanel
+      v-if="claimResult"
+      :result="claimResult"
+      :saved="claimSaved"
+      :is-submitting="claimSubmitting"
+      :error="claimError"
+      :error-field="claimErrorField"
+      @claim="handleClaim"
+      @play-again="handlePlayAgain"
+      @back-to-games="handleBackToGames"
+    />
+
     <PrizeLedger
       v-if="stage === 'landing'"
       :prizes="prizes"
-      :won-prize-id="player?.prizeId || ''"
+      :won-prize-id="wheelLandedPrizeId"
     />
 
     <BiaiCoursesMarquee v-if="stage === 'landing'" />

@@ -2,14 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { answerQuiz, finishQuiz, startQuiz } from '../api/client.js';
 
-const props = defineProps({
-  token: {
-    type: String,
-    required: true,
-  },
-});
-
-defineEmits(['back']);
+const emit = defineEmits(['back', 'finished']);
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
 
@@ -43,7 +36,7 @@ async function loadQuiz() {
   runningScore.value = 0;
 
   try {
-    const data = await startQuiz(props.token);
+    const data = await startQuiz();
     questions.value = data.questions;
     quizToken.value = data.token;
     total.value = data.total || data.questions.length;
@@ -62,7 +55,7 @@ async function chooseOption(option) {
   errorMsg.value = '';
 
   try {
-    const result = await answerQuiz(props.token, {
+    const result = await answerQuiz({
       token: quizToken.value,
       questionId: currentQuestion.value.id,
       optionId: option.id,
@@ -99,12 +92,13 @@ async function nextQuestion() {
   errorMsg.value = '';
 
   try {
-    const result = await finishQuiz(props.token, {
+    const result = await finishQuiz({
       token: quizToken.value,
       answers: answers.value,
     });
     finalScore.value = result.score;
     total.value = result.total;
+    emit('finished', result);
   } catch (error) {
     errorMsg.value = error.message || 'Could not save your quiz score.';
   } finally {
@@ -160,13 +154,10 @@ onMounted(loadQuiz);
       </div>
       <p class="quiz-result__score">{{ finalScore }}<span>/{{ total }}</span></p>
       <p class="quiz-result__body">
-        Your result has been saved. Thanks for testing your AI literacy with BIAI.
+        Add your details to save this score and hear about quiz prizes.
       </p>
       <div class="quiz-result__actions">
-        <button type="button" class="btn btn--primary" @click="loadQuiz">PLAY AGAIN</button>
-        <button type="button" class="btn quiz-back-btn" @click="$emit('back')">
-          BACK TO GAMES
-        </button>
+        <button type="button" class="btn quiz-back-btn" @click="$emit('back')">BACK TO GAMES</button>
       </div>
     </div>
 
@@ -240,7 +231,7 @@ onMounted(loadQuiz);
           :disabled="isSubmitting"
           @click="nextQuestion"
         >
-          {{ isSubmitting ? 'SAVING' : isLastQuestion ? 'SEE MY SCORE' : 'NEXT QUESTION' }}
+          {{ isSubmitting ? 'CHECKING' : isLastQuestion ? 'SEE MY SCORE' : 'NEXT QUESTION' }}
         </button>
       </div>
     </div>

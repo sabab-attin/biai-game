@@ -3,11 +3,13 @@ import { createApp } from './app.js';
 import { loadConfig } from './config/env.js';
 import { Admin } from './models/Admin.js';
 import { AdminAudit } from './models/AdminAudit.js';
+import { Player } from './models/Player.js';
 import { Record } from './models/Record.js';
 import { ensureAdminSeed } from './services/adminAuth.js';
 import {
   createShutdownSnapshot,
   ensureCsvHealthy,
+  rebuildCsvFromMongo,
   startCsvScheduler,
 } from './services/csvStore.js';
 import { restoreRecordsIfEmpty } from './services/recordStore.js';
@@ -27,6 +29,16 @@ async function start() {
 
   await Promise.all([Record.init(), Admin.init(), AdminAudit.init()]);
   await ensureAdminSeed(config);
+
+  // Guest mode has been removed; clear any guest rows left by older builds.
+  const removedGuests = await Record.deleteMany({ source: 'guest' });
+  const removedGuestPlayers = await Player.collection.deleteMany({ isGuest: true });
+  if (removedGuests.deletedCount || removedGuestPlayers.deletedCount) {
+    console.log(
+      `[records] Removed ${removedGuests.deletedCount} guest record(s) and ${removedGuestPlayers.deletedCount} guest player(s).`
+    );
+    await rebuildCsvFromMongo(config, { snapshot: true });
+  }
 
   const restored = await restoreRecordsIfEmpty(config);
   if (restored.restored) {

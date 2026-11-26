@@ -2,7 +2,7 @@
 
 A promotional event app for **BIAI (Bangladesh Institute of Artificial Intelligence — [biai.com.bd](https://biai.com.bd))**, built with **Vue 3**, **Express**, **MongoDB**, and a durable CSV/JSONL backup pipeline.
 
-Visitors pick **Spin the Wheel** or **Play Quiz** on the landing page, sign in with a name and phone number (email is optional) or continue as a guest, then go straight into the selected game. Guest sessions are numbered sequentially as `#Guest1`, `#Guest2`, and so on. Every login, guest entry, quiz result, wheel result, and admin manual entry is written to MongoDB and appended to a JSONL backup before the UI confirms success.
+Visitors pick **Spin the Wheel** or **Play Quiz** on the landing page and start playing immediately — no sign-up wall. Contact details (name + phone, email optional) are requested **only after a win**, so the prize can be arranged. Every claimed result and admin manual entry is written to MongoDB and appended to a JSONL backup before the UI confirms success.
 
 ## Quick Start
 
@@ -49,9 +49,9 @@ Test-NetConnection 127.0.0.1 -Port 27017
 | --- | --- | --- |
 | `PORT` | API port | `4000` |
 | `MONGODB_URI` | MongoDB connection string (source of truth) | `mongodb://127.0.0.1:27017/carnival_wheel` |
-| `SESSION_SECRET` | Signs player, quiz, and admin tokens. **Change this.** | dev fallback (do not use in production) |
+| `SESSION_SECRET` | Signs quiz and admin tokens. **Change this.** | dev fallback (do not use in production) |
 | `FRONTEND_ORIGIN` | Allowed browser origin for CORS | `http://localhost:5173` |
-| `MAX_SPINS_PER_PLAYER` | Wheel turns per player | `1` |
+| `MAX_SPINS_PER_PLAYER` | Stored on player profiles for prize history | `1` |
 | `CSV_FILE_PATH` | Generated CSV path | `./data/records.csv` |
 | `BACKUP_DIR` | Backup root | `./backups` |
 | `RECORD_LOG_PATH` | Append-only JSONL backup | `./backups/records.log.jsonl` |
@@ -69,9 +69,11 @@ The admin URL path comes from the frontend build variable `VITE_ADMIN_PATH` (def
 
 MongoDB is authoritative. The `records` collection stores:
 
-`name`, `phone`, `email`, `reward`, `timestamp` (UTC ISO), `source` (`wheel`, `quiz`, `dart`, `guest`), `game`, `createdAt`.
+`name`, `phone`, `email`, `reward`, `timestamp` (UTC ISO), `source` (`wheel`, `quiz`, `dart`), `game`, `createdAt`.
 
-Normal login requires `name` and a valid Bangladesh `phone`; `email` is optional and stored as null when omitted. Guest and admin manual-entry records may still have null `phone` / `email`. Optional contact fields are validated only when supplied. Manual entries always require a `game` value.
+A record is created only when a player claims a winning result, or when an admin logs a manual entry. Name and a valid Bangladesh `phone` are required at claim time; `email` is optional and stored as null when omitted. Manual-entry records may still have null `phone` / `email`. Optional contact fields are validated only when supplied. Manual entries always require a `game` value.
+
+Guest mode has been removed. Any legacy `source: "guest"` records are deleted on startup and the CSV is rebuilt.
 
 The existing `players` and `spins` collections still power wheel turn state and prize history.
 
@@ -127,12 +129,13 @@ Admin sessions use an httpOnly, SameSite cookie signed with `SESSION_SECRET`. Ev
 
 ## Public Flow
 
-1. **Landing** — two large cards: **Spin the Wheel** and **Play Quiz**.
-2. **Login** — full name and phone number required; email optional; consent line shown. **Continue as Guest** saves a sequential name such as `#Guest1` with null contact details and source `guest`.
-3. After login the selected game opens directly:
-   - **Quiz** — 5 distinct questions selected from the 10-question bank with Fisher-Yates; options are shuffled; one question at a time with instant right/wrong feedback; final `x/5` score saved to `records`.
-   - **Wheel** — existing 9-segment wheel and server-weighted prize logic are unchanged.
-4. **Prizes** — compact ledger of every reward; **How it works** is no longer shown.
+1. **Landing** — two large cards: **Spin the Wheel** and **Play Quiz**. No details are requested here.
+2. The selected game opens immediately:
+   - **Wheel** — existing 9-segment wheel and server-weighted prize logic are unchanged. A player can spin without identifying themselves.
+   - **Quiz** — 5 distinct questions selected from the 10-question bank with Fisher-Yates; options are shuffled; one question at a time with instant right/wrong feedback; final `x/5` score.
+3. **Win prompt** — after a claimable wheel prize or a finished quiz, a check-in dialog appears. The player enters name + phone (email optional) and the record is saved with the game name. Nothing is saved unless they submit.
+4. **Prize claim** — wheel winners receive a `CRN-` claim code on screen. Quiz players see their saved score. Both can then play again or return to the games screen.
+5. **Prizes** — compact ledger of every reward; **How it works** is no longer shown.
 
 ## Testing & Build
 
@@ -146,28 +149,30 @@ npm run build
 
 Backend tests cover:
 
-- Phone requirement and optional email on login
-- Sequentially numbered guest names (`#Guest1`, `#Guest2`, …)
+- Contact details being required only at claim time, and optional email
+- Removal of guest mode and the old pre-login endpoints
+- Spin-again results never creating a claim
 - CSV escaping (formula prefixes, commas, quotes, newlines, nulls)
 - Atomic CSV writes with no partial or temp files
 - Startup CSV repair after corruption
-- Plain 404 responses from admin routes for anonymous and normal players
+- Plain 404 responses from admin routes for anonymous callers
 - Admin login, manual-entry CRUD (with required `game`), audit logging, and authenticated CSV download
-- Quiz selection of 5 distinct questions and score persistence
+- Quiz selection of 5 distinct questions and score persistence after claiming
 - JSONL restore when MongoDB is empty
-- One-spin wheel behavior and wheel record persistence
 
 ## Manual Test Checklist
 
-1. Start MongoDB, backend, and frontend. Confirm the app loads at `http://localhost:5173` and the landing page shows only **Spin the Wheel** and **Play Quiz**.
-2. Choose **Spin the Wheel**, then submit the login form with a name but no phone number; confirm it is rejected with a phone error.
-3. Submit the form with a name and valid phone but no email. Confirm the wheel opens directly.
-4. Sign out, click **Continue as Guest**, and confirm the guest is saved as `#Guest1` (or the next number) with source `Guest`.
-5. Click **admin** in the footer or open `http://localhost:5173/#admin`, sign in as `biai`, and confirm the new record shows the phone number, a blank email, source `Wheel`, and the **Statistics** tab is gone.
-6. From the landing page choose **Play Quiz**, sign in as a guest, answer all 5 questions, and confirm the score is shown and saved with source `Quiz`.
-7. In the admin **Manual Entry** tab, try saving without a game; confirm it is rejected. Add a manual entry with name and game, edit it, then delete it after the confirmation prompt.
-8. Open the green **CSV / Backup** button from any tab and click **Download CSV**; confirm the header and escaped values match the records.
-9. Click **Restore / Rebuild CSV now** and confirm the record count and snapshot timestamp update.
-10. Corrupt `backend/data/records.csv` (for example, write random bytes), restart the backend, and confirm the file is rebuilt from MongoDB.
-11. Stop the backend mid-write with `Ctrl+C` (SIGINT). Restart and confirm `records.csv` is valid and the JSONL backup still contains the latest entries.
-12. Empty the `records` collection in MongoDB while keeping the JSONL file, restart, and confirm records are restored from the log.
+1. Start MongoDB, backend, and frontend. Confirm the app loads at `http://localhost:5173` and the landing page shows only **Spin the Wheel**, **Play Quiz**, **Prizes to Claim**, and **BIAI Courses**.
+2. Choose **Spin the Wheel**. Confirm the wheel is playable without entering any details.
+3. Spin until you land a prize. Confirm the check-in dialog appears only for a claimable prize, and that leaving it unsaved creates no record.
+4. Submit the dialog with a name but no phone; confirm it is rejected with a phone error. Then add a valid phone and submit.
+5. Confirm the success screen shows the saved prize details along with **PLAY AGAIN** and **BACK TO GAMES** actions.
+6. Return to the games screen, choose **Play Quiz**, answer all 5 questions, and confirm the check-in dialog appears after the final score.
+7. Open **admin** in the footer or `http://localhost:5173/#admin`, sign in as `biai`, and confirm the new records show the phone number, a blank email, and the correct game name.
+8. Confirm the source filter has no **Guest** option.
+9. In the admin **Manual Entry** tab, try saving without a game; confirm it is rejected. Add a manual entry with name and game, edit it, then delete it after the confirmation prompt.
+10. Open the green **CSV / Backup** button from any tab and click **Download CSV**; confirm the header and escaped values match the records.
+11. Click **Restore / Rebuild CSV now** and confirm the record count and snapshot timestamp update.
+12. Corrupt `backend/data/records.csv` (for example, write random bytes), restart the backend, and confirm the file is rebuilt from MongoDB.
+13. Stop the backend mid-write with `Ctrl+C` (SIGINT). Restart and confirm `records.csv` is valid and the JSONL backup still contains the latest entries.
+14. Empty the `records` collection in MongoDB while keeping the JSONL file, restart, and confirm records are restored from the log.
