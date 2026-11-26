@@ -94,8 +94,17 @@ export async function ensureAdminSeed(config, logger = console) {
 export function requireAdmin(config) {
   return async function adminGuard(req, res, next) {
     try {
-      const cookies = parseCookies(req.headers.cookie || '');
-      const token = cookies[ADMIN_COOKIE];
+      // Accept token from Authorization header (Bearer) OR cookie
+      let token = null;
+      const authHeader = req.headers['authorization'] || '';
+      if (authHeader.startsWith('Bearer ')) {
+        token = authHeader.slice(7).trim();
+      }
+      if (!token) {
+        const cookies = parseCookies(req.headers.cookie || '');
+        token = cookies[ADMIN_COOKIE];
+      }
+
       const payload = verifyAdminToken(token, config.sessionSecret);
       if (!payload) {
         return adminNotFound(res);

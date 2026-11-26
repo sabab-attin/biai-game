@@ -109,6 +109,7 @@ export function createApiRouter(config) {
       });
 
       res.json({
+        token,
         admin: {
           id: String(admin._id),
           username: admin.username,

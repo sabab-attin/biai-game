@@ -1,12 +1,28 @@
 const API_HOST = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 const API_BASE = `${API_HOST}/api`;
 
+const TOKEN_KEY = 'biai_admin_token';
+
+export function saveAdminToken(token) {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearAdminToken() {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+function getAdminToken() {
+  return localStorage.getItem(TOKEN_KEY) || '';
+}
+
 async function request(path, options = {}) {
+  const token = getAdminToken();
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
   });
@@ -32,6 +48,9 @@ export function loginAdmin(username, password) {
   return request('/admin-login', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
+  }).then((data) => {
+    if (data?.token) saveAdminToken(data.token);
+    return data;
   });
 }
 
@@ -40,6 +59,7 @@ export function fetchAdminSession() {
 }
 
 export function logoutAdmin() {
+  clearAdminToken();
   return request('/admin/logout', { method: 'POST' });
 }
 
