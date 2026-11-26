@@ -85,7 +85,8 @@ export function loadConfig(overrides = {}) {
     overrides.secureCookies ??
     (process.env.COOKIE_SECURE !== undefined
       ? process.env.COOKIE_SECURE === 'true'
-      : process.env.NODE_ENV === 'production' || isVercel);
+      : process.env.NODE_ENV === 'production' ||
+        (isVercel && process.env.VERCEL_ENV !== 'development'));
 
   return {
     isVercel,

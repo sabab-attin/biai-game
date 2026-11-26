@@ -7,7 +7,7 @@ import test from 'node:test';
 import mongoose from 'mongoose';
 import { createApp } from '../app.js';
 import { loadConfig } from '../config/env.js';
-import { createServerlessHandler } from '../serverless.js';
+import serverlessApp, { createServerlessHandler } from '../serverless.js';
 import { getQuizPrizeForScore } from '../config/prizes.js';
 import { QUIZ_QUESTIONS, getQuizQuestion, pickQuizQuestions } from '../config/quiz.js';
 import { Admin } from '../models/Admin.js';
@@ -575,10 +575,12 @@ test('vercel serverless config uses /tmp storage and fails cleanly without MONGO
   const prevCsvPath = process.env.CSV_FILE_PATH;
   const prevMongoUri = process.env.MONGODB_URI;
   const prevCookieSecure = process.env.COOKIE_SECURE;
+  const prevVercelEnv = process.env.VERCEL_ENV;
   delete process.env.BACKUP_DIR;
   delete process.env.CSV_FILE_PATH;
   delete process.env.MONGODB_URI;
   delete process.env.COOKIE_SECURE;
+  delete process.env.VERCEL_ENV;
 
   try {
     const vercelConfig = loadConfig({
@@ -591,6 +593,47 @@ test('vercel serverless config uses /tmp storage and fails cleanly without MONGO
     assert.equal(vercelConfig.mongodbUri, '');
     assert.equal(vercelConfig.secureCookies, true);
     assert.ok(vercelConfig.allowedOrigins.includes('https://biai-game.vercel.app'));
+
+    process.env.VERCEL_ENV = 'development';
+    assert.equal(loadConfig({ isVercel: true }).secureCookies, false);
+    delete process.env.VERCEL_ENV;
+
+    const vercelJson = JSON.parse(
+      await fs.readFile(path.resolve(import.meta.dirname, '../../../vercel.json'), 'utf8')
+    );
+    assert.equal(vercelJson.services.backend.root, 'backend');
+    assert.equal(vercelJson.services.backend.framework, 'express');
+    assert.equal(vercelJson.services.backend.entrypoint, 'src/serverless.js');
+    assert.equal(vercelJson.services.frontend.root, 'frontend');
+    assert.equal(vercelJson.services.frontend.framework, 'vite');
+    assert.deepEqual(
+      vercelJson.rewrites.map((r) => [r.source, r.destination?.service]),
+      [
+        ['/api/(.*)', 'backend'],
+        ['/(.*)', 'frontend'],
+      ]
+    );
+    for (const forbidden of [
+      'functions',
+      'installCommand',
+      'buildCommand',
+      'devCommand',
+      'ignoreCommand',
+      'outputDirectory',
+      'framework',
+    ]) {
+      assert.equal(forbidden in vercelJson, false);
+    }
+
+    const defaultSrv = http.createServer(serverlessApp);
+    await new Promise((resolve) => defaultSrv.listen(0, resolve));
+    try {
+      const defaultPort = defaultSrv.address().port;
+      const prizesRes = await fetch(`http://127.0.0.1:${defaultPort}/api/prizes`);
+      assert.equal(prizesRes.status, 200);
+    } finally {
+      await new Promise((resolve) => defaultSrv.close(resolve));
+    }
 
     const handler = createServerlessHandler({ mongodbUri: '' });
     const srv = http.createServer(handler);
@@ -616,5 +659,6 @@ test('vercel serverless config uses /tmp storage and fails cleanly without MONGO
     if (prevCsvPath !== undefined) process.env.CSV_FILE_PATH = prevCsvPath;
     if (prevMongoUri !== undefined) process.env.MONGODB_URI = prevMongoUri;
     if (prevCookieSecure !== undefined) process.env.COOKIE_SECURE = prevCookieSecure;
+    if (prevVercelEnv !== undefined) process.env.VERCEL_ENV = prevVercelEnv;
   }
 });

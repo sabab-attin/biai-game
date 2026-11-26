@@ -149,16 +149,21 @@ npm run build
 
 ## Deploy on Vercel
 
-This repository is configured as a single full-stack Vercel project using [vercel.json](./vercel.json) (static Vue build from `frontend/dist` and serverless Express API at [api/index.mjs](./api/index.mjs)):
+This repository is configured as a multi-service Vercel project using [vercel.json](./vercel.json):
 
-1. Import the GitHub repository into **Vercel** with the **Root Directory** set to `.` (default).
+- `backend` service (`backend/`, Express entrypoint `src/serverless.js`), exposed at `/api/(.*)`
+- `frontend` service (`frontend/`, Vite SPA), exposed at `/(.*)`
+
+To deploy:
+
+1. Import the GitHub repository into **Vercel** with the **Root Directory** set to `.` (repo root).
 2. Add a hosted **MongoDB Atlas** database (allow Vercel access in Atlas **Network Access**, e.g. `0.0.0.0/0`).
 3. Set these **Environment Variables** in Vercel Project Settings:
    - `MONGODB_URI`: your MongoDB Atlas connection string
    - `SESSION_SECRET`: a long random secret string
    - `ADMIN_USERNAMES`: `biai`
    - `ADMIN_PASSWORD`: your admin password (or provide `ADMIN_PASSWORD_HASH`)
-4. Deploy. All `/api/*` routes (including `/api/admin/*` CSV exports via `/tmp` rebuilt from MongoDB) and client routes are handled automatically on the same domain.
+4. Test locally with `vercel dev` or deploy to Vercel. All `/api/*` routes (including `/api/admin/*` CSV exports via `/tmp` rebuilt from MongoDB) and frontend routes share one domain automatically.
 
 Backend tests cover:
 

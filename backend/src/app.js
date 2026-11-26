@@ -12,7 +12,7 @@ function isSameHost(origin, req) {
   }
 }
 
-export function createApp(config) {
+export function createApp(config, { beforeApi } = {}) {
   const app = express();
   const allowedOrigins = new Set([
     ...(Array.isArray(config.allowedOrigins) ? config.allowedOrigins : []),
@@ -35,6 +35,10 @@ export function createApp(config) {
     })(req, res, next)
   );
   app.use(express.json({ limit: '64kb' }));
+
+  if (typeof beforeApi === 'function') {
+    app.use(beforeApi);
+  }
 
   app.use('/api', createApiRouter(config));
 

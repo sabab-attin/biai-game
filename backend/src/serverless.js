@@ -7,39 +7,31 @@ function isHealthOrPrizesPath(url = '') {
   return pathname === '/api/health' || pathname === '/api/prizes';
 }
 
-/** Build the Express request handler wrapped with lazy database bootstrap for serverless deploys. */
+/** Build the Express application wrapped with lazy database bootstrap for Vercel serverless deploys. */
 export function createServerlessHandler(overrides = {}) {
   const config = loadConfig({ isVercel: true, ...overrides });
-  const app = createApp(config);
 
-  return async function serverlessHandler(req, res) {
-    if (!isHealthOrPrizesPath(req.url)) {
+  return createApp(config, {
+    beforeApi: async (req, res, next) => {
+      if (isHealthOrPrizesPath(req.originalUrl || req.url)) {
+        return next();
+      }
+
       try {
         await ensureServerlessReady(config);
+        return next();
       } catch (error) {
         console.error('[serverless] Initialization failed:', error);
-        res.statusCode = 503;
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.end(
-          JSON.stringify({
-            error:
-              error.publicMessage ||
-              'Database connection unavailable. Verify MONGODB_URI and network access.',
-          })
-        );
-        return;
+        return res.status(503).json({
+          error:
+            error.publicMessage ||
+            'Database connection unavailable. Verify MONGODB_URI and network access.',
+        });
       }
-    }
-
-    return app(req, res);
-  };
+    },
+  });
 }
 
-let cachedDefaultHandler = null;
+const app = createServerlessHandler();
 
-export default function defaultServerlessHandler(req, res) {
-  if (!cachedDefaultHandler) {
-    cachedDefaultHandler = createServerlessHandler();
-  }
-  return cachedDefaultHandler(req, res);
-}
+export default app;
