@@ -100,7 +100,7 @@ The CSV and backup files live outside `frontend/` and are never served as static
 
 ## Admin Accounts
 
-Both built-in accounts, `Nusrat` and `Zunaid`, share the same password and are configured with `ADMIN_USERNAMES` + `ADMIN_PASSWORD` (or `ADMIN_PASSWORD_HASH`). The server seeds them on startup and removes any admin accounts that are not listed. Alternatively, seed manually:
+Built-in admin account (`biai`) is configured with `ADMIN_USERNAMES` + `ADMIN_PASSWORD` (or `ADMIN_PASSWORD_HASH`). The server seeds it on startup and removes any admin accounts that are not listed. Alternatively, seed manually:
 
 ```bash
 cd backend
@@ -163,7 +163,7 @@ Backend tests cover:
 2. Choose **Spin the Wheel**, then submit the login form with a name but no phone number; confirm it is rejected with a phone error.
 3. Submit the form with a name and valid phone but no email. Confirm the wheel opens directly.
 4. Sign out, click **Continue as Guest**, and confirm the guest is saved as `#Guest1` (or the next number) with source `Guest`.
-5. Click **admin** in the footer or open `http://localhost:5173/#admin`, sign in as `Nusrat` or `Zunaid`, and confirm the new record shows the phone number, a blank email, source `Wheel`, and the **Statistics** tab is gone.
+5. Click **admin** in the footer or open `http://localhost:5173/#admin`, sign in as `biai`, and confirm the new record shows the phone number, a blank email, source `Wheel`, and the **Statistics** tab is gone.
 6. From the landing page choose **Play Quiz**, sign in as a guest, answer all 5 questions, and confirm the score is shown and saved with source `Quiz`.
 7. In the admin **Manual Entry** tab, try saving without a game; confirm it is rejected. Add a manual entry with name and game, edit it, then delete it after the confirmation prompt.
 8. Open the green **CSV / Backup** button from any tab and click **Download CSV**; confirm the header and escaped values match the records.

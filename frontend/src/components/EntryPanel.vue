@@ -38,7 +38,6 @@ const form = reactive({
 
 const localError = ref('');
 const localField = ref(null);
-const copied = ref(false);
 
 const nameInputRef = ref(null);
 const phoneInputRef = ref(null);
@@ -113,26 +112,12 @@ function clearFieldError(field) {
   }
 }
 
-async function copyCode() {
-  if (!props.player?.claimCode || !navigator.clipboard) return;
-  try {
-    await navigator.clipboard.writeText(props.player.claimCode);
-    copied.value = true;
-    setTimeout(() => {
-      copied.value = false;
-    }, 2000);
-  } catch {
-    // Clipboard fallback ignored if blocked
-  }
-}
-
 function handleSwitch() {
   form.name = '';
   form.phone = '';
   form.email = '';
   localError.value = '';
   localField.value = null;
-  copied.value = false;
   emit('switchPlayer');
 }
 </script>
@@ -297,16 +282,6 @@ function handleSwitch() {
         <div>
           <p class="ticket-code__label">Winning prize</p>
           <p class="ticket-prize">{{ player.prizeTitle }}</p>
-        </div>
-
-        <div class="ticket-code-row">
-          <div>
-            <span class="ticket-code__label">Claim code</span>
-            <span class="ticket-code__value">{{ player.claimCode }}</span>
-          </div>
-          <button type="button" class="btn btn--compact" @click="copyCode">
-            {{ copied ? 'COPIED' : 'COPY CODE' }}
-          </button>
         </div>
 
         <div class="btn-pair">

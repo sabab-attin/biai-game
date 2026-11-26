@@ -1,28 +1,31 @@
 :root {
   color-scheme: light;
-  --space-3xs: 2px;
-  --space-2xs: 4px;
-  --space-xs: 8px;
-  --space-sm: 12px;
-  --space-md: 16px;
-  --space-lg: 24px;
-  --space-xl: 40px;
-  --space-2xl: 64px;
-  --space-3xl: 96px;
-  --space-4xl: 144px;
+  --space-3xs: 0.125rem;
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: clamp(1.75rem, 3.2dvh, 2.5rem);
+  --space-2xl: clamp(2.25rem, 4.5dvh, 4rem);
+  --space-3xl: clamp(4rem, 7dvh, 6rem);
+  --space-4xl: clamp(5rem, 9dvh, 9rem);
 
-  --text-xs: 0.8125rem;
-  --text-sm: 0.875rem;
-  --text-md: 1rem;
-  --text-lg: 1.25rem;
-  --text-xl: 1.5625rem;
-  --text-2xl: 1.953rem;
-  --text-3xl: 2.441rem;
-  --text-display-s: clamp(2.125rem, 3.6vw + 0.5rem, 3.5rem);
+  --text-xs: clamp(0.75rem, 0.2vw + 0.7rem, 0.875rem);
+  --text-sm: clamp(0.875rem, 0.25vw + 0.8rem, 1rem);
+  --text-md: clamp(1rem, 0.25vw + 0.92rem, 1.125rem);
+  --text-lg: clamp(1.15rem, 0.4vw + 1.05rem, 1.35rem);
+  --text-xl: clamp(1.4rem, 0.6vw + 1.25rem, 1.75rem);
+  --text-2xl: clamp(1.75rem, 1vw + 1.45rem, 2.25rem);
+  --text-3xl: clamp(2.125rem, 1.4vw + 1.75rem, 2.75rem);
+  --text-display-s: clamp(2.125rem, 3.6vw + 0.5rem, 3.75rem);
   --text-display: clamp(2.625rem, 4.6vw + 0.85rem, 4.75rem);
   --text-section: clamp(2rem, 2.5vw + 1rem, 3.35rem);
   --text-title: clamp(1.25rem, 0.75vw + 0.875rem, 1.625rem);
-  --text-lead: clamp(1.0625rem, 0.35vw + 0.95rem, 1.3125rem);
+  --text-lead: clamp(1.0625rem, 0.35vw + 0.95rem, 1.35rem);
+
+  --touch-min: clamp(3.25rem, 4.4dvh, 4.5rem);
+  --touch-compact: clamp(2.875rem, 3.8dvh, 3.75rem);
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
@@ -32,6 +35,7 @@
   --dur-long: 420ms;
 
   --color-paper: oklch(93% 0.04 58);
+  --color-paper-bright: oklch(97.5% 0.014 68);
   --color-paper-2: oklch(88% 0.048 50);
   --color-paper-3: oklch(82% 0.058 45);
   --color-ink: oklch(18% 0.075 22);
@@ -56,23 +60,24 @@
   --font-body: "Golos Text", system-ui, sans-serif;
   --font-outlier: var(--font-body);
 
-  --radius-card: 2px;
-  --radius-pill: 2px;
+  --radius-card: 0.125rem;
+  --radius-pill: 0.125rem;
   --radius-round: 50%;
   --rule-hair: 1px;
   --rule-bar: 2px;
-  --shadow-card: 4px 4px 0 var(--color-ink);
-  --shadow-card-lg: 6px 6px 0 var(--color-ink);
-  --shadow-card-press: 1px 1px 0 var(--color-ink);
+  --shadow-card: 0.25rem 0.25rem 0 var(--color-ink);
+  --shadow-card-sm: 0.1875rem 0.1875rem 0 var(--color-ink);
+  --shadow-card-lg: 0.375rem 0.375rem 0 var(--color-ink);
+  --shadow-card-press: 0.0625rem 0.0625rem 0 var(--color-ink);
   --tracking-display: 0.015em;
   --display-weight: 800;
 
-  --container: 1440px;
-  --gutter: 64px;
-  --gap-columns: 32px;
-  --section-gap-s: 96px;
-  --section-gap: 120px;
-  --section-gap-l: 144px;
+  --container: 90rem;
+  --gutter: clamp(1rem, 4vw, 4rem);
+  --gap-columns: clamp(1rem, 2.2vw, 2rem);
+  --section-gap-s: clamp(2.5rem, 6dvh, 6rem);
+  --section-gap: clamp(3rem, 7.5dvh, 7.5rem);
+  --section-gap-l: clamp(4rem, 9dvh, 9rem);
 
   --z-base: 1;
   --z-raised: 10;
@@ -86,19 +91,19 @@
 
 @media (max-width: 60rem) {
   :root {
-    --gutter: 24px;
-    --section-gap-s: 72px;
-    --section-gap: 88px;
-    --section-gap-l: 104px;
+    --gutter: clamp(1rem, 3vw, 1.5rem);
+    --section-gap-s: clamp(2rem, 5dvh, 4.5rem);
+    --section-gap: clamp(2.5rem, 6dvh, 5.5rem);
+    --section-gap-l: clamp(3rem, 7dvh, 6.5rem);
   }
 }
 
 @media (max-width: 40rem) {
   :root {
-    --gutter: 16px;
-    --section-gap-s: 56px;
-    --section-gap: 64px;
-    --section-gap-l: 80px;
-    --gap-columns: 16px;
+    --gutter: clamp(0.875rem, 3.5vw, 1rem);
+    --section-gap-s: clamp(1.75rem, 4dvh, 3.5rem);
+    --section-gap: clamp(2rem, 5dvh, 4rem);
+    --section-gap-l: clamp(2.5rem, 6dvh, 5rem);
+    --gap-columns: 1rem;
   }
 }

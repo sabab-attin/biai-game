@@ -11,12 +11,15 @@ const props = defineProps({
 
 defineEmits(['back']);
 
+const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
+
 const questions = ref([]);
 const quizToken = ref('');
 const currentIndex = ref(0);
 const selectedOptionId = ref(null);
 const feedback = ref(null);
 const answers = ref([]);
+const runningScore = ref(0);
 const isLoading = ref(true);
 const isSubmitting = ref(false);
 const errorMsg = ref('');
@@ -24,9 +27,6 @@ const finalScore = ref(null);
 const total = ref(5);
 
 const currentQuestion = computed(() => questions.value[currentIndex.value] || null);
-const progressLabel = computed(() =>
-  questions.value.length ? `Question ${currentIndex.value + 1} of ${questions.value.length}` : ''
-);
 const isLastQuestion = computed(
   () => currentIndex.value === questions.value.length - 1
 );
@@ -40,6 +40,7 @@ async function loadQuiz() {
   selectedOptionId.value = null;
   feedback.value = null;
   answers.value = [];
+  runningScore.value = 0;
 
   try {
     const data = await startQuiz(props.token);
@@ -68,6 +69,9 @@ async function chooseOption(option) {
     });
 
     feedback.value = result;
+    if (result.correct) {
+      runningScore.value += 1;
+    }
     answers.value = [
       ...answers.value,
       { questionId: currentQuestion.value.id, optionId: option.id },
@@ -129,43 +133,79 @@ onMounted(loadQuiz);
     <div class="quiz-panel__head">
       <div>
         <p class="quiz-panel__eyebrow">AI literacy challenge</p>
-        <h1 id="quiz-title" class="quiz-panel__title">PLAY QUIZ.</h1>
+        <h1 id="quiz-title" class="quiz-panel__title">
+          PLAY QUIZ<span class="quiz-panel__dot">.</span>
+        </h1>
       </div>
-      <button type="button" class="btn btn--compact" @click="$emit('back')">BACK</button>
+      <button type="button" class="btn btn--compact quiz-back-btn" @click="$emit('back')">
+        ← BACK
+      </button>
     </div>
 
-    <div v-if="isLoading" class="quiz-state">
+    <div v-if="isLoading" class="quiz-state" role="status">
       <p>Loading your 5 questions…</p>
     </div>
 
     <div v-else-if="finalScore !== null" class="quiz-result" aria-live="polite">
-      <p class="quiz-result__label">Final score</p>
+      <div class="quiz-card__top">
+        <span class="quiz-counter"><strong>QUIZ COMPLETE</strong></span>
+        <span class="quiz-score-badge">SCORE {{ finalScore }} / {{ total }}</span>
+      </div>
+      <div class="quiz-segments" aria-hidden="true">
+        <span
+          v-for="n in total"
+          :key="n"
+          class="quiz-segment quiz-segment--active"
+        ></span>
+      </div>
       <p class="quiz-result__score">{{ finalScore }}<span>/{{ total }}</span></p>
       <p class="quiz-result__body">
-        Your result has been saved. Thanks for testing your AI literacy.
+        Your result has been saved. Thanks for testing your AI literacy with BIAI.
       </p>
       <div class="quiz-result__actions">
         <button type="button" class="btn btn--primary" @click="loadQuiz">PLAY AGAIN</button>
-        <button type="button" class="btn" @click="$emit('back')">BACK TO GAMES</button>
+        <button type="button" class="btn quiz-back-btn" @click="$emit('back')">
+          BACK TO GAMES
+        </button>
       </div>
     </div>
 
     <div v-else-if="currentQuestion" class="quiz-card">
-      <div class="quiz-progress">
-        <span>{{ progressLabel }}</span>
-        <span class="quiz-progress__track">
-          <span
-            class="quiz-progress__bar"
-            :style="{ width: `${((currentIndex + 1) / questions.length) * 100}%` }"
-          ></span>
+      <div class="quiz-card__top">
+        <span class="quiz-counter">
+          <strong>QUESTION {{ currentIndex + 1 }}</strong>
+          <span class="quiz-counter__total"> / {{ questions.length }}</span>
         </span>
+        <span class="quiz-score-badge" aria-live="polite">SCORE {{ runningScore }}</span>
       </div>
 
-      <h2 class="quiz-question">{{ currentQuestion.prompt }}</h2>
+      <div
+        class="quiz-segments"
+        role="progressbar"
+        :aria-valuenow="currentIndex + 1"
+        aria-valuemin="1"
+        :aria-valuemax="questions.length"
+        :aria-label="`Question ${currentIndex + 1} of ${questions.length}`"
+      >
+        <span
+          v-for="(q, idx) in questions"
+          :key="q.id"
+          class="quiz-segment"
+          :class="{ 'quiz-segment--active': idx <= currentIndex }"
+        ></span>
+      </div>
+
+      <div class="quiz-question-block">
+        <div class="quiz-question-block__meta">
+          <span class="quiz-question-badge">Q{{ currentIndex + 1 }}</span>
+          <span class="quiz-topic-badge">{{ currentQuestion.category || 'Core concepts' }}</span>
+        </div>
+        <h2 class="quiz-question">{{ currentQuestion.prompt }}</h2>
+      </div>
 
       <div class="quiz-options">
         <button
-          v-for="option in currentQuestion.options"
+          v-for="(option, idx) in currentQuestion.options"
           :key="option.id"
           type="button"
           class="quiz-option"
@@ -173,7 +213,10 @@ onMounted(loadQuiz);
           :disabled="Boolean(feedback) || isSubmitting"
           @click="chooseOption(option)"
         >
-          {{ option.label }}
+          <span class="quiz-option__letter" aria-hidden="true">
+            {{ OPTION_LETTERS[idx] || idx + 1 }}
+          </span>
+          <span class="quiz-option__text">{{ option.label }}</span>
         </button>
       </div>
 
@@ -183,16 +226,15 @@ onMounted(loadQuiz);
         :class="feedback.correct ? 'quiz-feedback--correct' : 'quiz-feedback--wrong'"
         aria-live="polite"
       >
-        {{ feedback.correct ? 'Correct!' : 'Not quite — the highlighted answer is correct.' }}
+        {{ feedback.correct ? 'Correct! Point added to your score.' : 'Not quite — the highlighted answer is correct.' }}
       </p>
 
       <p v-if="errorMsg" class="form-help form-help--error" aria-live="polite">
         {{ errorMsg }}
       </p>
 
-      <div class="quiz-actions">
+      <div v-if="feedback" class="quiz-actions">
         <button
-          v-if="feedback"
           type="button"
           class="btn btn--primary"
           :disabled="isSubmitting"

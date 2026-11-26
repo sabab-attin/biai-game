@@ -23,12 +23,10 @@ defineProps({
 
       <ul class="prize-grid">
         <li
-          v-for="(prize, idx) in prizes"
+          v-for="prize in prizes"
           :key="prize.id"
           class="prize-card"
           :class="{ 'prize-card--won': wonPrizeId === prize.id }"
-          data-reveal
-          :style="{ '--i': idx }"
         >
           <div class="prize-card__title">
             <span

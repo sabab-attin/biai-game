@@ -8,6 +8,7 @@ import {
   spinWheel,
 } from './api/client.js';
 import { ADMIN_HASH_BASE } from './admin/path.js';
+import BiaiCoursesMarquee from './components/BiaiCoursesMarquee.vue';
 import ChoiceScreen from './components/ChoiceScreen.vue';
 import EntryPanel from './components/EntryPanel.vue';
 import NavBar from './components/NavBar.vue';
@@ -212,6 +213,18 @@ function handleSelectGame(game) {
   stage.value = 'entry';
 }
 
+async function handleGoHome(selector = '') {
+  entryError.value = '';
+  entryErrorField.value = null;
+  stage.value = 'landing';
+  await nextTick();
+  if (selector && selector !== '#top') {
+    document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}
+
 function handleBackToLanding() {
   entryError.value = '';
   entryErrorField.value = null;
@@ -252,13 +265,10 @@ function handleHubClick() {
   }
 }
 
-async function handleSpinComplete(result) {
+function handleSpinComplete(result) {
   player.value = result.player;
   isSpinning.value = false;
   spinAgain.value = Boolean(result.spinAgain);
-  if (spinAgain.value) return;
-  await nextTick();
-  entryPanelRef.value?.$el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function handleSwitchPlayer() {
@@ -277,7 +287,7 @@ function handleSwitchPlayer() {
 <template>
   <a class="skip" href="#main">Skip to content</a>
 
-  <NavBar />
+  <NavBar @go-home="handleGoHome" />
 
   <main id="main">
     <section v-if="stage === 'landing'" class="landing-section" aria-label="Choose a game">
@@ -388,9 +398,12 @@ function handleSwitchPlayer() {
     </button>
 
     <PrizeLedger
+      v-if="stage === 'landing'"
       :prizes="prizes"
       :won-prize-id="player?.prizeId || ''"
     />
+
+    <BiaiCoursesMarquee v-if="stage === 'landing'" />
   </main>
 
   <footer class="site-footer">

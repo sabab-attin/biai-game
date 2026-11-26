@@ -1,6 +1,7 @@
 export const QUIZ_QUESTIONS = Object.freeze([
   {
     id: 'q1',
+    category: 'Core concepts',
     prompt: 'What does "LLM" stand for?',
     options: [
       { id: 0, label: 'Linear Learning Machine' },
@@ -12,6 +13,7 @@ export const QUIZ_QUESTIONS = Object.freeze([
   },
   {
     id: 'q2',
+    category: 'Architectures',
     prompt: 'Which architecture powers most modern LLMs?',
     options: [
       { id: 0, label: 'Decision tree' },
@@ -23,6 +25,7 @@ export const QUIZ_QUESTIONS = Object.freeze([
   },
   {
     id: 'q3',
+    category: 'Core concepts',
     prompt: 'What is an AI "hallucination"?',
     options: [
       { id: 0, label: 'The model shutting down' },
@@ -34,6 +37,7 @@ export const QUIZ_QUESTIONS = Object.freeze([
   },
   {
     id: 'q4',
+    category: 'Applied AI',
     prompt: 'What does RAG stand for in AI?',
     options: [
       { id: 0, label: 'Random Answer Generation' },
@@ -45,6 +49,7 @@ export const QUIZ_QUESTIONS = Object.freeze([
   },
   {
     id: 'q5',
+    category: 'Prompting',
     prompt: 'What is a "prompt"?',
     options: [
       { id: 0, label: 'A software bug' },
@@ -56,6 +61,7 @@ export const QUIZ_QUESTIONS = Object.freeze([
   },
   {
     id: 'q6',
+    category: 'Core concepts',
     prompt: 'In LLMs, what is a "token"?',
     options: [
       { id: 0, label: 'A login password' },
@@ -67,6 +73,7 @@ export const QUIZ_QUESTIONS = Object.freeze([
   },
   {
     id: 'q7',
+    category: 'Training data',
     prompt: 'What is "training data"?',
     options: [
       { id: 0, label: "The model's final answers" },
@@ -78,6 +85,7 @@ export const QUIZ_QUESTIONS = Object.freeze([
   },
   {
     id: 'q8',
+    category: 'AI literacy',
     prompt: 'Which is good AI literacy practice?',
     options: [
       { id: 0, label: 'Trust every AI answer' },
@@ -89,6 +97,7 @@ export const QUIZ_QUESTIONS = Object.freeze([
   },
   {
     id: 'q9',
+    category: 'AI ethics',
     prompt: 'What is "bias" in AI systems?',
     options: [
       { id: 0, label: 'A faster processor' },
@@ -100,6 +109,7 @@ export const QUIZ_QUESTIONS = Object.freeze([
   },
   {
     id: 'q10',
+    category: 'Machine learning',
     prompt: 'What is supervised learning?',
     options: [
       { id: 0, label: 'Learning with no data' },
@@ -126,6 +136,7 @@ export function pickQuizQuestions(count = 5, rng = Math.random) {
     .slice(0, safeCount)
     .map((question) => ({
       id: question.id,
+      category: question.category,
       prompt: question.prompt,
       options: shuffle(question.options, rng),
     }));
