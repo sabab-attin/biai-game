@@ -4,7 +4,7 @@ const API_BASE = `${API_HOST}/api`;
 async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
-    credentials: 'same-origin',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(options.headers || {}),
@@ -90,7 +90,7 @@ export function rebuildAdminCsv() {
 
 export async function downloadAdminCsv() {
   const res = await fetch(`${API_BASE}/admin/csv/download`, {
-    credentials: 'same-origin',
+    credentials: 'include',
   });
   if (!res.ok) {
     const error = new Error(`Could not download CSV (${res.status}).`);

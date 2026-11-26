@@ -32,15 +32,15 @@ export function adminNotFound(res) {
 export function setAdminCookie(res, token, config) {
   res.cookie(ADMIN_COOKIE, token, {
     httpOnly: true,
-    sameSite: 'strict',
-    secure: Boolean(config.secureCookies),
+    sameSite: 'none',
+    secure: true,
     maxAge: ADMIN_COOKIE_MAX_AGE_MS,
     path: '/',
   });
 }
 
 export function clearAdminCookie(res) {
-  res.clearCookie(ADMIN_COOKIE, { path: '/' });
+  res.clearCookie(ADMIN_COOKIE, { path: '/', sameSite: 'none', secure: true });
 }
 
 export async function hashPassword(password) {

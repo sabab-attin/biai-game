@@ -4,7 +4,7 @@ const API_BASE = `${API_HOST}/api`;
 async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
-    credentials: 'same-origin',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(options.headers || {}),
