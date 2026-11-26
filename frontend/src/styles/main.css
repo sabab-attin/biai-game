@@ -1865,10 +1865,6 @@
   background: var(--color-accent);
 }
 
-.source-badge--guest {
-  color: var(--color-muted);
-}
-
 .admin-shell .form-help {
   margin: 0;
 }
@@ -1895,3 +1891,93 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Public winner check-in */
+.wheel-notice {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  border: var(--rule-bar) solid var(--color-ink);
+  border-radius: var(--radius-card);
+  background: var(--color-paper);
+  font-weight: 600;
+}
+
+.wheel-notice--again {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+
+.wheel-notice--none {
+  background: var(--color-paper-3);
+}
+
+.wheel-notice--error {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.claim-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-toast);
+  display: grid;
+  place-items: center;
+  padding: var(--space-md);
+  overflow-y: auto;
+  background: var(--color-scrim);
+}
+
+.claim-panel {
+  width: min(100%, 640px);
+  max-height: calc(100dvh - var(--space-xl));
+  overflow-y: auto;
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+  border: var(--rule-bar) solid var(--color-ink);
+  border-radius: var(--radius-card);
+  background: var(--color-paper-2);
+  box-shadow: var(--shadow-card-lg);
+}
+
+.claim-panel__eyebrow {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-accent-2);
+}
+
+.claim-panel__title {
+  margin: 0;
+  font-size: var(--text-display-s);
+  line-height: 0.95;
+  overflow-wrap: anywhere;
+}
+
+.claim-panel__lead {
+  margin: 0;
+  color: var(--color-ink-2);
+}
+
+.claim-meta {
+  padding-block: var(--space-sm);
+  background: var(--color-paper);
+  border: var(--rule-hair) solid var(--color-ink);
+  padding-inline: var(--space-sm);
+}
+
+.claim-code {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  letter-spacing: var(--tracking-display);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 40rem) {
+  .claim-panel {
+    padding: var(--space-md);
+  }
+}
+

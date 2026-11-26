@@ -9,9 +9,9 @@ import { loadConfig } from '../config/env.js';
 import { QUIZ_QUESTIONS, getQuizQuestion, pickQuizQuestions } from '../config/quiz.js';
 import { Admin } from '../models/Admin.js';
 import { AdminAudit } from '../models/AdminAudit.js';
-import { Counter } from '../models/Counter.js';
+import { PendingPlay } from '../models/PendingPlay.js';
 import { Player } from '../models/Player.js';
-import { Record } from '../models/Record.js';
+import { RECORD_SOURCES, Record } from '../models/Record.js';
 import { Spin } from '../models/Spin.js';
 import { ensureAdminSeed } from '../services/adminAuth.js';
 import {
@@ -33,9 +33,8 @@ let adminCookie;
 
 const TEST_ADMIN = { username: 'ops-admin', password: 'test-admin-password' };
 
-function jsonRequest(pathname, { method = 'GET', body, token, cookie } = {}) {
+function jsonRequest(pathname, { method = 'GET', body, cookie } = {}) {
   const headers = { 'Content-Type': 'application/json' };
-  if (token) headers.Authorization = `Bearer ${token}`;
   if (cookie) headers.Cookie = cookie;
 
   return fetch(`${baseUrl}${pathname}`, {
@@ -45,13 +44,15 @@ function jsonRequest(pathname, { method = 'GET', body, token, cookie } = {}) {
   });
 }
 
-async function enterPlayer(payload) {
-  const response = await jsonRequest('/api/players/enter', {
-    method: 'POST',
-    body: payload,
-  });
-  assert.equal(response.status, 200);
-  return response.json();
+async function spinUntilClaimable() {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const response = await jsonRequest('/api/play/wheel/spin', { method: 'POST' });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.ok(result.segmentIndex >= 0 && result.segmentIndex < 9);
+    if (result.claimable) return result;
+  }
+  throw new Error('Expected a claimable wheel result within 80 spins.');
 }
 
 test.before(async () => {
@@ -63,7 +64,7 @@ test.before(async () => {
     Player.deleteMany({}),
     Spin.deleteMany({}),
     Record.deleteMany({}),
-    Counter.deleteMany({}),
+    PendingPlay.deleteMany({}),
     Admin.deleteMany({}),
     AdminAudit.deleteMany({}),
   ]);
@@ -83,7 +84,13 @@ test.before(async () => {
     adminLoginWindowMs: 60_000,
   });
 
-  await Promise.all([Player.init(), Spin.init(), Record.init(), Admin.init()]);
+  await Promise.all([
+    Player.init(),
+    Spin.init(),
+    Record.init(),
+    PendingPlay.init(),
+    Admin.init(),
+  ]);
   await ensureAdminSeed(config);
 
   const app = createApp(config);
@@ -101,7 +108,7 @@ test.after(async () => {
     Player.deleteMany({}),
     Spin.deleteMany({}),
     Record.deleteMany({}),
-    Counter.deleteMany({}),
+    PendingPlay.deleteMany({}),
     Admin.deleteMany({}),
     AdminAudit.deleteMany({}),
   ]);
@@ -111,35 +118,76 @@ test.after(async () => {
   }
 });
 
-test('a player must provide a phone number while email stays optional', async () => {
-  const missingPhone = await jsonRequest('/api/players/enter', {
+test('a wheel win is saved only after the winner submits a valid phone number', async () => {
+  const spin = await spinUntilClaimable();
+
+  assert.ok(spin.playId);
+  assert.ok(spin.claimCode.startsWith('CRN-'));
+  assert.equal(spin.claimable, true);
+  assert.ok(spin.prize?.title);
+
+  const recordId = `play-${spin.playId}`;
+  assert.equal(await Record.countDocuments({ recordId }), 0);
+
+  const missingPhone = await jsonRequest('/api/play/claim', {
     method: 'POST',
-    body: { name: 'No Phone Player' },
+    body: { playId: spin.playId, name: 'Wheel Winner' },
   });
   assert.equal(missingPhone.status, 400);
   assert.equal((await missingPhone.json()).field, 'phone');
 
-  const emailOnly = await jsonRequest('/api/players/enter', {
+  const emailOnly = await jsonRequest('/api/play/claim', {
     method: 'POST',
-    body: { name: 'Email Only Player', email: 'email-only@example.com' },
+    body: {
+      playId: spin.playId,
+      name: 'Email Only Player',
+      email: 'email-only@example.com',
+    },
   });
   assert.equal(emailOnly.status, 400);
 
-  const entered = await enterPlayer({ name: 'No Email Player', phone: '01612345678' });
-  assert.equal(entered.player.name, 'No Email Player');
-  assert.equal(entered.player.phone, '01612345678');
-  assert.equal(entered.player.email, '');
+  const badEmail = await jsonRequest('/api/play/claim', {
+    method: 'POST',
+    body: {
+      playId: spin.playId,
+      name: 'Bad Email',
+      phone: '01711111111',
+      email: 'not-an-email',
+    },
+  });
+  assert.equal(badEmail.status, 400);
+  assert.equal((await badEmail.json()).field, 'email');
 
-  const record = await Record.findOne({ playerId: entered.player.id, source: 'wheel' }).lean();
+  const claim = await jsonRequest('/api/play/claim', {
+    method: 'POST',
+    body: {
+      playId: spin.playId,
+      name: 'No Email Player',
+      phone: '01612345678',
+    },
+  });
+  assert.equal(claim.status, 200);
+  const claimed = await claim.json();
+
+  assert.equal(claimed.record.source, 'wheel');
+  assert.equal(claimed.record.game, 'Wheel');
+  assert.equal(claimed.record.name, 'No Email Player');
+  assert.equal(claimed.record.phone, '01612345678');
+  assert.equal(claimed.record.email, null);
+  assert.equal(claimed.record.reward, spin.prize.title);
+  assert.equal(claimed.player.name, 'No Email Player');
+  assert.equal(claimed.claimCode, spin.claimCode);
+
+  const record = await Record.findOne({ recordId }).lean();
   assert.ok(record);
-  assert.equal(record.name, 'No Email Player');
-  assert.equal(record.phone, '01612345678');
   assert.equal(record.email, null);
 
   const log = await fs.readFile(config.recordLogPath, 'utf8');
   assert.match(log, /"name":"No Email Player"/);
   assert.match(log, /"phone":"01612345678"/);
   assert.match(log, /"email":null/);
+  assert.match(log, /"source":"wheel"/);
+  assert.match(log, /"game":"Wheel"/);
 
   await rebuildCsvFromMongo(config, { snapshot: false });
   const rows = parseCsv(await fs.readFile(config.recordsCsvPath, 'utf8'));
@@ -147,47 +195,48 @@ test('a player must provide a phone number while email stays optional', async ()
   assert.ok(row);
   assert.equal(row[1], '01612345678');
   assert.equal(row[2], '');
-  assert.equal(row[3], '');
+  assert.equal(row[3], spin.prize.title);
   assert.equal(row[5], 'wheel');
+
+  const repeatClaim = await jsonRequest('/api/play/claim', {
+    method: 'POST',
+    body: {
+      playId: spin.playId,
+      name: 'No Email Player',
+      phone: '01612345678',
+    },
+  });
+  assert.equal(repeatClaim.status, 409);
 });
 
-test('supplied but malformed phone or email is rejected', async () => {
-  const badEmail = await jsonRequest('/api/players/enter', {
-    method: 'POST',
-    body: { name: 'Bad Email', phone: '01711111111', email: 'not-an-email' },
-  });
-  assert.equal(badEmail.status, 400);
+test('guest mode and the old pre-login endpoints are gone', async () => {
+  assert.deepEqual([...RECORD_SOURCES], ['wheel', 'quiz', 'dart']);
 
-  const badPhone = await jsonRequest('/api/players/enter', {
-    method: 'POST',
-    body: { name: 'Bad Phone', phone: '123' },
-  });
-  assert.equal(badPhone.status, 400);
+  for (const pathname of [
+    '/api/players/guest',
+    '/api/players/enter',
+    '/api/players/me',
+    '/api/wheel/spin',
+    '/api/quiz/start',
+  ]) {
+    const response = await jsonRequest(pathname, { method: 'POST' });
+    assert.equal(response.status, 404);
+  }
 });
 
-test('guest entries are numbered sequentially and saved as #Guest names', async () => {
-  await Promise.all([Counter.deleteMany({}), Record.deleteMany({ source: 'guest' })]);
+test('a spin-again result is a free retry and never creates a claim', async () => {
+  let spinAgain = null;
+  for (let attempt = 0; attempt < 200 && !spinAgain; attempt += 1) {
+    const response = await jsonRequest('/api/play/wheel/spin', { method: 'POST' });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    if (result.spinAgain) spinAgain = result;
+  }
 
-  const firstResponse = await jsonRequest('/api/players/guest', { method: 'POST' });
-  assert.equal(firstResponse.status, 200);
-  const { player: first } = await firstResponse.json();
-  assert.equal(first.isGuest, true);
-  assert.equal(first.name, '#Guest1');
-
-  const firstRecord = await Record.findOne({ playerId: first.id, source: 'guest' }).lean();
-  assert.ok(firstRecord);
-  assert.equal(firstRecord.name, '#Guest1');
-  assert.equal(firstRecord.phone, null);
-  assert.equal(firstRecord.email, null);
-
-  const secondResponse = await jsonRequest('/api/players/guest', { method: 'POST' });
-  assert.equal(secondResponse.status, 200);
-  const { player: second } = await secondResponse.json();
-  assert.equal(second.name, '#Guest2');
-
-  const secondRecord = await Record.findOne({ playerId: second.id, source: 'guest' }).lean();
-  assert.ok(secondRecord);
-  assert.equal(secondRecord.name, '#Guest2');
+  assert.ok(spinAgain, 'expected a spin-again result within 200 spins');
+  assert.equal(spinAgain.claimable, false);
+  assert.equal(spinAgain.playId, null);
+  assert.equal(spinAgain.claimCode, '');
 });
 
 test('CSV output escapes formulas, separators, quotes, newlines, and blanks nulls', () => {
@@ -203,10 +252,10 @@ test('CSV output escapes formulas, separators, quotes, newlines, and blanks null
     {
       name: 'Quote "and"\nnewline',
       phone: null,
-      email: 'guest@example.com',
+      email: 'player@example.com',
       reward: null,
       timestamp: new Date('2026-01-02T00:00:00.000Z'),
-      source: 'guest',
+      source: 'quiz',
     },
   ]);
 
@@ -229,10 +278,10 @@ test('CSV output escapes formulas, separators, quotes, newlines, and blanks null
   assert.deepEqual(rows[2], [
     'Quote "and"\nnewline',
     '',
-    'guest@example.com',
+    'player@example.com',
     '',
     '2026-01-02T00:00:00.000Z',
-    'guest',
+    'quiz',
   ]);
 });
 
@@ -253,6 +302,14 @@ test('atomic CSV writes never expose partial content or leave temp files', async
 });
 
 test('startup rebuild repairs a corrupt CSV from MongoDB', async () => {
+  await Record.create({
+    recordId: 'csv-health-check',
+    name: 'Health Player',
+    timestamp: new Date('2026-02-01T00:00:00.000Z'),
+    source: 'dart',
+    game: 'Darts',
+  });
+
   await fs.mkdir(path.dirname(config.recordsCsvPath), { recursive: true });
   await fs.writeFile(config.recordsCsvPath, 'this is not csv\u0000', 'utf8');
 
@@ -264,18 +321,15 @@ test('startup rebuild repairs a corrupt CSV from MongoDB', async () => {
   assert.equal(isCsvContentValid(repaired), true);
 });
 
-test('admin routes return plain 404 to anonymous callers and normal players', async () => {
+test('admin routes return plain 404 to anonymous callers', async () => {
   const anonymousStats = await jsonRequest('/api/admin/stats');
   assert.equal(anonymousStats.status, 404);
   assert.equal(await anonymousStats.text(), 'Not Found');
 
-  const entered = await enterPlayer({
-    name: 'Normal Player',
-    phone: '01722222222',
-    email: 'normal@example.com',
+  const fakeSession = await jsonRequest('/api/admin/stats', {
+    cookie: 'biai_admin=fake-token',
   });
-  const playerStats = await jsonRequest('/api/admin/stats', { token: entered.token });
-  assert.equal(playerStats.status, 404);
+  assert.equal(fakeSession.status, 404);
 
   const anonymousDownload = await jsonRequest('/api/admin/csv/download');
   assert.equal(anonymousDownload.status, 404);
@@ -287,7 +341,7 @@ test('admin routes return plain 404 to anonymous callers and normal players', as
   assert.equal(wrongLogin.status, 404);
 });
 
-test('seeded admin can log in, read records, manage dart entries, and download CSV', async () => {
+test('seeded admin can log in, read records, manage manual entries, and download CSV', async () => {
   const login = await jsonRequest('/api/admin-login', {
     method: 'POST',
     body: TEST_ADMIN,
@@ -307,7 +361,8 @@ test('seeded admin can log in, read records, manage dart entries, and download C
   const stats = await jsonRequest('/api/admin/stats', { cookie: adminCookie });
   assert.equal(stats.status, 200);
   const statsBody = await stats.json();
-  assert.ok(statsBody.totalRecords >= 3);
+  assert.ok(statsBody.totalRecords >= 2);
+  assert.equal(statsBody.sourceCounts.guest, undefined);
 
   const loginAudits = await AdminAudit.countDocuments({ action: 'login' });
   assert.ok(loginAudits >= 1);
@@ -360,6 +415,7 @@ test('seeded admin can log in, read records, manage dart entries, and download C
   const csv = await download.text();
   assert.ok(csv.startsWith(RECORD_CSV_HEADER));
   assert.match(csv, /Dart Player/);
+  assert.doesNotMatch(csv, /,guest$/m);
 
   const removed = await jsonRequest(`/api/admin/dart/${dartRecord.recordId}`, {
     method: 'DELETE',
@@ -374,7 +430,7 @@ test('seeded admin can log in, read records, manage dart entries, and download C
   assert.ok((await AdminAudit.countDocuments({ action: 'csv.download' })) >= 1);
 });
 
-test('quiz sessions contain five distinct questions and scores persist', async () => {
+test('quiz sessions contain five distinct questions and scores persist after claiming', async () => {
   for (let attempt = 0; attempt < 25; attempt += 1) {
     const questions = pickQuizQuestions(5);
     assert.equal(questions.length, 5);
@@ -384,11 +440,7 @@ test('quiz sessions contain five distinct questions and scores persist', async (
     }
   }
 
-  const entered = await enterPlayer({ name: 'Quiz Player', phone: '01812345678' });
-  const start = await jsonRequest('/api/quiz/start', {
-    method: 'POST',
-    token: entered.token,
-  });
+  const start = await jsonRequest('/api/play/quiz/start', { method: 'POST' });
   assert.equal(start.status, 200);
   const quiz = await start.json();
   assert.equal(quiz.questions.length, 5);
@@ -399,9 +451,8 @@ test('quiz sessions contain five distinct questions and scores persist', async (
   const answers = [];
   for (const question of quiz.questions) {
     const source = getQuizQuestion(question.id);
-    const answer = await jsonRequest('/api/quiz/answer', {
+    const answer = await jsonRequest('/api/play/quiz/answer', {
       method: 'POST',
-      token: entered.token,
       body: {
         token: quiz.token,
         questionId: question.id,
@@ -414,54 +465,48 @@ test('quiz sessions contain five distinct questions and scores persist', async (
     answers.push({ questionId: question.id, optionId: source.correctOptionId });
   }
 
-  const finish = await jsonRequest('/api/quiz/finish', {
+  const finish = await jsonRequest('/api/play/quiz/finish', {
     method: 'POST',
-    token: entered.token,
     body: { token: quiz.token, answers },
   });
   assert.equal(finish.status, 200);
   const result = await finish.json();
   assert.equal(result.score, 5);
   assert.equal(result.total, 5);
+  assert.ok(result.playId);
 
-  const saved = await Record.findOne({ playerId: entered.player.id, source: 'quiz' }).lean();
+  const recordId = `play-${result.playId}`;
+  assert.equal(await Record.countDocuments({ recordId }), 0);
+
+  const claim = await jsonRequest('/api/play/claim', {
+    method: 'POST',
+    body: {
+      playId: result.playId,
+      name: 'Quiz Player',
+      phone: '01812345678',
+      email: 'quiz-player@example.com',
+    },
+  });
+  assert.equal(claim.status, 200);
+
+  const saved = await Record.findOne({ recordId }).lean();
   assert.ok(saved);
+  assert.equal(saved.source, 'quiz');
+  assert.equal(saved.game, 'Quiz');
   assert.equal(saved.score, 5);
   assert.equal(saved.result, '5/5');
-});
+  assert.equal(saved.reward, 'Quiz score 5/5');
+  assert.equal(saved.email, 'quiz-player@example.com');
 
-test('the wheel keeps one spin per player and saves a wheel record', async () => {
-  const entered = await enterPlayer({ name: 'Wheel Player', phone: '01912345678' });
-
-  let spun = null;
-  for (let attempt = 0; attempt < 40 && !spun; attempt += 1) {
-    const response = await jsonRequest('/api/wheel/spin', {
-      method: 'POST',
-      token: entered.token,
-    });
-    assert.equal(response.status, 200);
-    const result = await response.json();
-    assert.ok(result.segmentIndex >= 0 && result.segmentIndex < 9);
-    if (!result.spinAgain) spun = result;
-  }
-
-  assert.ok(spun, 'expected a non-spin-again result within 40 attempts');
-  assert.ok(spun.claimCode.startsWith('CRN-'));
-  assert.equal(spun.player.spinsRemaining, 0);
-
-  const wheelRecord = await Record.findOne({
-    playerId: entered.player.id,
-    source: 'wheel',
-    reward: spun.prize.title,
-  }).lean();
-  assert.ok(wheelRecord);
-  assert.equal(wheelRecord.name, 'Wheel Player');
-
-  const secondSpin = await jsonRequest('/api/wheel/spin', {
+  const repeatClaim = await jsonRequest('/api/play/claim', {
     method: 'POST',
-    token: entered.token,
+    body: {
+      playId: result.playId,
+      name: 'Quiz Player',
+      phone: '01812345678',
+    },
   });
-  assert.equal(secondSpin.status, 409);
+  assert.equal(repeatClaim.status, 409);
 });
 
 test('an empty database can be restored from the JSONL backup log', async () => {
@@ -476,6 +521,7 @@ test('an empty database can be restored from the JSONL backup log', async () => 
     createdAt: '2026-03-01T09:30:05.000Z',
     playerId: null,
     result: '10 points',
+    game: 'Darts',
     score: null,
   };
 

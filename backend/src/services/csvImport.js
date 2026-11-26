@@ -30,7 +30,7 @@ export async function importRecordsFromCsv(csvText, config) {
 
   for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
     const row = rows[rowIndex];
-    const source = (cell(row, indexOf('source')) || 'guest').toLowerCase();
+    const source = cell(row, indexOf('source')).toLowerCase();
 
     try {
       if (!RECORD_SOURCES.includes(source)) {

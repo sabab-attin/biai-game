@@ -79,12 +79,11 @@ function formatTime(value) {
 }
 
 function sourceLabel(source) {
-  return { wheel: 'Wheel', quiz: 'Quiz', dart: 'Manual', guest: 'Guest' }[source] || source;
+  return { wheel: 'Wheel', quiz: 'Quiz', dart: 'Manual' }[source] || source;
 }
 
 function displayName(record) {
-  if (record.name) return record.name;
-  return record.source === 'guest' ? 'Guest' : '—';
+  return record.name || '—';
 }
 
 async function refreshAll({ quiet = false } = {}) {
@@ -399,7 +398,6 @@ onBeforeUnmount(() => {
             <option value="wheel">Wheel</option>
             <option value="quiz">Quiz</option>
             <option value="dart">Manual entry</option>
-            <option value="guest">Guest</option>
           </select>
         </div>
         <span class="recent-sub">{{ filteredRecords.length }} shown</span>

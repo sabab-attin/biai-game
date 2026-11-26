@@ -1,24 +1,14 @@
 <script setup>
-defineProps({
-  player: {
-    type: Object,
-    default: null,
-  },
-});
-
-defineEmits(['quiz', 'wheel', 'switch']);
+defineEmits(['quiz', 'wheel']);
 </script>
 
 <template>
   <section class="choice-screen" aria-labelledby="choice-title">
     <p class="choice-screen__eyebrow">BIAI Carnival</p>
-    <h1 id="choice-title" class="choice-screen__title">CHOOSE YOUR GAME.</h1>
+    <h1 id="choice-title" class="choice-screen__title">PLAY FIRST.<br />SHARE DETAILS ONLY IF YOU WIN.</h1>
     <p class="choice-screen__lead">
-      {{
-        player
-          ? `Signed in as ${player.name}. Pick your next game.`
-          : 'Two ways to play. Pick one, then sign in.'
-      }}
+      No sign-up needed. Pick a game, play your round, and we will only ask for your
+      contact details after you win so we can arrange your prize.
     </p>
 
     <div class="choice-grid">
@@ -26,7 +16,7 @@ defineEmits(['quiz', 'wheel', 'switch']);
         <span class="choice-card__tag">Prize round</span>
         <span class="choice-card__name">SPIN THE WHEEL</span>
         <span class="choice-card__body">
-          Take your turn at the carnival wheel and claim the reward it lands on.
+          Take your turn at the carnival wheel. Land a prize and claim it in a few seconds.
         </span>
         <span class="choice-card__cta">START SPINNING →</span>
       </button>
@@ -35,19 +25,10 @@ defineEmits(['quiz', 'wheel', 'switch']);
         <span class="choice-card__tag">Knowledge round</span>
         <span class="choice-card__name">PLAY QUIZ</span>
         <span class="choice-card__body">
-          5 quick AI literacy questions. Instant feedback, score saved automatically.
+          5 quick AI literacy questions. Instant feedback, then save your score only if you want the prize.
         </span>
         <span class="choice-card__cta">START QUIZ →</span>
       </button>
     </div>
-
-    <button
-      v-if="player"
-      type="button"
-      class="choice-screen__switch"
-      @click="$emit('switch')"
-    >
-      Not you? Switch player
-    </button>
   </section>
 </template>
