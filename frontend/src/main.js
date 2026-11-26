@@ -1,5 +1,46 @@
-import { createApp } from 'vue';
-import './styles/main.css';
-import App from './App.vue';
+import { ADMIN_HASH_BASE, isAdminHash } from './admin/path.js';
 
-createApp(App).mount('#app');
+function renderNotFound() {
+  const app = document.getElementById('app');
+  if (!app) return;
+  app.innerHTML = `
+    <main class="not-found">
+      <p class="not-found__code">404</p>
+      <h1>Not Found</h1>
+      <p>The page you requested does not exist.</p>
+      <a class="btn" href="/">Back to the event</a>
+    </main>
+  `;
+}
+
+async function boot() {
+  const hash = window.location.hash || '';
+
+  if (isAdminHash(hash)) {
+    const { mountAdmin } = await import('./admin/main.js');
+    mountAdmin();
+    return;
+  }
+
+  const { mountPublic } = await import('./public/main.js');
+  mountPublic();
+}
+
+// The footer admin link changes only the hash, so reload when the visitor switches
+// between the public event and the admin console. In-admin hash changes (login/base)
+// stay on the same surface and are handled by AdminApp.
+const bootedHash = window.location.hash || '';
+
+window.addEventListener('hashchange', () => {
+  const nextIsAdmin = isAdminHash(window.location.hash || '');
+  if (nextIsAdmin !== isAdminHash(bootedHash)) {
+    window.location.reload();
+  }
+});
+
+boot().catch((error) => {
+  console.error('App failed to start:', error);
+  renderNotFound();
+});
+
+export { ADMIN_HASH_BASE };

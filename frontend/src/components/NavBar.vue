@@ -1,9 +1,7 @@
 <script setup>
 import { ref } from 'vue';
-import { smoothScrollTo } from '../utils/scroll.js';
-import BiaiMark from './BiaiMark.vue';
 
-defineEmits(['openAdmin']);
+const emit = defineEmits(['goHome']);
 
 const mobileMenuOpen = ref(false);
 
@@ -11,9 +9,9 @@ function closeMenu() {
   mobileMenuOpen.value = false;
 }
 
-function navigateTo(hash) {
+function goHome(selector = '#top') {
   closeMenu();
-  smoothScrollTo(hash);
+  emit('goHome', selector);
 }
 </script>
 
@@ -22,25 +20,27 @@ function navigateTo(hash) {
     <div class="container">
       <nav class="nav" aria-label="Main navigation">
         <div class="nav__group">
-          <a class="nav__link" href="#prizes" @click.prevent="navigateTo('#prizes')">Prizes</a>
-          <a class="nav__link" href="#biai-programs" @click.prevent="navigateTo('#biai-programs')">
-            BIAI Programs
-          </a>
-          <a class="nav__link" href="#rules" @click.prevent="navigateTo('#rules')">Rules</a>
+          <a class="nav__link" href="#prizes" @click.prevent="goHome('#prizes')">Prizes</a>
+          <a class="nav__link" href="#courses" @click.prevent="goHome('#courses')">Courses</a>
         </div>
 
         <a
           class="nav__brand"
           href="#top"
-          aria-label="BIAI Prize Wheel home"
-          @click.prevent="navigateTo('#top')"
+          aria-label="BIAI home"
+          @click.prevent="goHome('#top')"
         >
-          <BiaiMark :size="26" />
-          <span>BIAI PRIZE WHEEL</span>
+          <img
+            class="nav__brand-logo"
+            src="/biai-logo.png"
+            width="28"
+            height="28"
+            alt=""
+          />
+          <span>BIAI</span>
         </a>
 
         <div class="nav__group nav__group--right">
-          <a class="nav__link" href="#recent" @click.prevent="navigateTo('#recent')">Recent wins</a>
           <a
             class="nav__link"
             href="https://biai.com.bd/"
@@ -49,15 +49,9 @@ function navigateTo(hash) {
           >
             biai.com.bd
           </a>
-          <button type="button" class="nav__link" @click="$emit('openAdmin')">
-            Organizer CSV
-          </button>
         </div>
 
         <div class="nav__mobile-controls">
-          <a class="nav__link" href="#biai-programs" @click.prevent="navigateTo('#biai-programs')">
-            BIAI
-          </a>
           <button
             type="button"
             class="btn btn--compact"
@@ -73,12 +67,8 @@ function navigateTo(hash) {
 
     <div v-show="mobileMenuOpen" id="mobile-nav-drawer" class="nav__drawer">
       <div class="container nav__drawer-inner">
-        <a class="nav__link" href="#prizes" @click.prevent="navigateTo('#prizes')">Prizes</a>
-        <a class="nav__link" href="#biai-programs" @click.prevent="navigateTo('#biai-programs')">
-          BIAI Programs
-        </a>
-        <a class="nav__link" href="#rules" @click.prevent="navigateTo('#rules')">Rules</a>
-        <a class="nav__link" href="#recent" @click.prevent="navigateTo('#recent')">Recent wins</a>
+        <a class="nav__link" href="#prizes" @click.prevent="goHome('#prizes')">Prizes</a>
+        <a class="nav__link" href="#courses" @click.prevent="goHome('#courses')">Courses</a>
         <a
           class="nav__link"
           href="https://biai.com.bd/"
@@ -88,16 +78,6 @@ function navigateTo(hash) {
         >
           biai.com.bd
         </a>
-        <button
-          type="button"
-          class="nav__link"
-          @click="
-            closeMenu();
-            $emit('openAdmin');
-          "
-        >
-          Organizer CSV
-        </button>
       </div>
     </div>
   </header>

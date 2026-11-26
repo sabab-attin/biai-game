@@ -33,8 +33,8 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 2px;
+  outline: 0.125rem solid var(--color-focus);
+  outline-offset: 0.125rem;
 }
 
 a {
@@ -135,9 +135,9 @@ td.num {
     scroll-behavior: auto;
   }
 
-  *:not(.keep-motion),
-  *:not(.keep-motion)::before,
-  *:not(.keep-motion)::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
