@@ -26,7 +26,10 @@ defineProps({
           v-for="prize in prizes"
           :key="prize.id"
           class="prize-card"
-          :class="{ 'prize-card--won': wonPrizeId === prize.id }"
+          :class="{
+            'prize-card--featured': prize.id === 'free-courses',
+            'prize-card--won': wonPrizeId === prize.id,
+          }"
         >
           <div class="prize-card__title">
             <span
@@ -35,6 +38,7 @@ defineProps({
               aria-hidden="true"
             ></span>
             <h3 class="prize-card__name">{{ prize.title }}</h3>
+            <span v-if="prize.id === 'free-courses'" class="prize-card__badge">Top prize</span>
           </div>
           <p class="prize-card__desc">{{ prize.description }}</p>
           <span class="prize-card__tag">

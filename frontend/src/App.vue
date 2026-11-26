@@ -3,12 +3,14 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { claimPlay, fetchPrizes, spinWheel } from './api/client.js';
 import { ADMIN_HASH_BASE } from './admin/path.js';
 import BiaiCoursesMarquee from './components/BiaiCoursesMarquee.vue';
+import CelebrationBlast from './components/CelebrationBlast.vue';
 import ChoiceScreen from './components/ChoiceScreen.vue';
 import ClaimPanel from './components/ClaimPanel.vue';
 import NavBar from './components/NavBar.vue';
 import PrizeLedger from './components/PrizeLedger.vue';
 import QuizPanel from './components/QuizPanel.vue';
 import SpinningWheel from './components/SpinningWheel.vue';
+import { playWinFanfare } from './utils/sound.js';
 
 const FALLBACK_PRIZES = [
   {
@@ -100,9 +102,11 @@ const chosenGame = ref('');
 const quizKey = ref(0);
 
 const isSpinning = ref(false);
+const isRevealingWin = ref(false);
 const spinTrigger = ref(null);
 const wheelNotice = ref(null);
 const wheelLandedPrizeId = ref('');
+const blastTrigger = ref(0);
 
 const claimResult = ref(null);
 const claimSaved = ref(null);
@@ -111,9 +115,14 @@ const claimError = ref('');
 const claimErrorField = ref(null);
 
 let revealObserver = null;
+let revealTimer = null;
 
 const canSpin = computed(
-  () => stage.value === 'wheel' && !isSpinning.value && !claimResult.value
+  () =>
+    stage.value === 'wheel' &&
+    !isSpinning.value &&
+    !isRevealingWin.value &&
+    !claimResult.value
 );
 
 onMounted(async () => {
@@ -145,8 +154,17 @@ onMounted(async () => {
   }
 });
 
+function clearRevealTimer() {
+  if (revealTimer) {
+    clearTimeout(revealTimer);
+    revealTimer = null;
+  }
+  isRevealingWin.value = false;
+}
+
 onBeforeUnmount(() => {
   revealObserver?.disconnect();
+  clearRevealTimer();
   document.body.style.overflow = '';
 });
 
@@ -155,6 +173,7 @@ watch(claimResult, (value) => {
 });
 
 function resetClaim() {
+  clearRevealTimer();
   claimResult.value = null;
   claimSaved.value = null;
   claimSubmitting.value = false;
@@ -220,6 +239,25 @@ async function handleSpin() {
   }
 }
 
+function launchWinReveal(payload, expectedStage, { withSound = false } = {}) {
+  if (withSound) {
+    playWinFanfare();
+  }
+  isRevealingWin.value = true;
+  blastTrigger.value += 1;
+
+  const delay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 420;
+  clearRevealTimer();
+  isRevealingWin.value = true;
+  revealTimer = setTimeout(() => {
+    revealTimer = null;
+    isRevealingWin.value = false;
+    if (stage.value !== expectedStage) return;
+    claimResult.value = payload;
+    blastTrigger.value += 1;
+  }, delay);
+}
+
 function handleSpinComplete(result) {
   if (stage.value !== 'wheel') return;
 
@@ -227,14 +265,19 @@ function handleSpinComplete(result) {
 
   if (result.claimable) {
     wheelLandedPrizeId.value = result.prize?.id || '';
-    claimResult.value = {
-      game: 'wheel',
-      playId: result.playId,
-      prizeId: result.prize?.id || '',
-      prizeTitle: result.prize?.title || 'a prize',
-      claimCode: result.claimCode || '',
-      segmentIndex: result.segmentIndex,
-    };
+    launchWinReveal(
+      {
+        game: 'wheel',
+        playId: result.playId,
+        prizeId: result.prize?.id || '',
+        prizeTitle: result.prize?.title || 'a prize',
+        prizeCategory: result.prize?.category || '',
+        prizeDescription: result.prize?.description || '',
+        claimCode: result.claimCode || '',
+        segmentIndex: result.segmentIndex,
+      },
+      'wheel'
+    );
     return;
   }
 
@@ -255,14 +298,22 @@ function handleSpinComplete(result) {
 }
 
 function handleQuizFinished(result) {
-  if (stage.value !== 'quiz') return;
+  if (stage.value !== 'quiz' || !result?.claimable || !result?.prize) return;
 
-  claimResult.value = {
-    game: 'quiz',
-    playId: result.playId,
-    score: result.score,
-    total: result.total,
-  };
+  launchWinReveal(
+    {
+      game: 'quiz',
+      playId: result.playId,
+      score: result.score,
+      total: result.total,
+      prizeId: result.prize.id || '',
+      prizeTitle: result.prize.title || 'a prize',
+      prizeCategory: result.prize.category || '',
+      prizeDescription: result.prize.description || '',
+    },
+    'quiz',
+    { withSound: true }
+  );
 }
 
 async function handleClaim(payload) {
@@ -278,6 +329,7 @@ async function handleClaim(payload) {
       ...payload,
     });
     claimSaved.value = saved;
+    blastTrigger.value += 1;
   } catch (error) {
     claimError.value = error.message || 'Could not save your details. Please try again.';
     claimErrorField.value = error.field || null;
@@ -346,15 +398,6 @@ function handleHubClick() {
             </button>
           </div>
 
-          <p
-            v-if="wheelNotice"
-            class="wheel-notice"
-            :class="`wheel-notice--${wheelNotice.tone}`"
-            aria-live="polite"
-          >
-            {{ wheelNotice.text }}
-          </p>
-
           <p class="form-consent">
             Play first. Share your name and phone number only after you win so we can arrange
             your prize. Email is optional.
@@ -367,6 +410,7 @@ function handleHubClick() {
           :won-prize-id="wheelLandedPrizeId"
           :spin-trigger="spinTrigger"
           :is-spinning="isSpinning"
+          :notice="wheelNotice"
           @hub-click="handleHubClick"
           @spin-complete="handleSpinComplete"
         />
@@ -381,6 +425,8 @@ function handleHubClick() {
     >
       ← GAMES
     </button>
+
+    <CelebrationBlast :trigger="blastTrigger" />
 
     <ClaimPanel
       v-if="claimResult"

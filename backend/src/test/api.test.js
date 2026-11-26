@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import mongoose from 'mongoose';
 import { createApp } from '../app.js';
 import { loadConfig } from '../config/env.js';
+import { createServerlessHandler } from '../serverless.js';
+import { getQuizPrizeForScore } from '../config/prizes.js';
 import { QUIZ_QUESTIONS, getQuizQuestion, pickQuizQuestions } from '../config/quiz.js';
 import { Admin } from '../models/Admin.js';
 import { AdminAudit } from '../models/AdminAudit.js';
@@ -431,14 +434,18 @@ test('seeded admin can log in, read records, manage manual entries, and download
 });
 
 test('quiz sessions contain five distinct questions and scores persist after claiming', async () => {
-  for (let attempt = 0; attempt < 25; attempt += 1) {
+  assert.equal(QUIZ_QUESTIONS.length, 30);
+  const seenIds = new Set();
+  for (let attempt = 0; attempt < 40; attempt += 1) {
     const questions = pickQuizQuestions(5);
     assert.equal(questions.length, 5);
     assert.equal(new Set(questions.map((question) => question.id)).size, 5);
     for (const question of questions) {
+      seenIds.add(question.id);
       assert.equal(new Set(question.options.map((option) => option.id)).size, 4);
     }
   }
+  assert.ok(seenIds.size > 10, 'expected shuffled questions across the 30-question bank');
 
   const start = await jsonRequest('/api/play/quiz/start', { method: 'POST' });
   assert.equal(start.status, 200);
@@ -473,7 +480,32 @@ test('quiz sessions contain five distinct questions and scores persist after cla
   const result = await finish.json();
   assert.equal(result.score, 5);
   assert.equal(result.total, 5);
+  assert.equal(result.claimable, true);
+  assert.equal(result.prize?.title, 'Free Course');
   assert.ok(result.playId);
+
+  assert.equal(getQuizPrizeForScore(0), null);
+  assert.equal(getQuizPrizeForScore(1)?.title, 'Stickers');
+  assert.equal(getQuizPrizeForScore(2)?.title, '10% Off');
+  assert.equal(getQuizPrizeForScore(3)?.title, '25% Off');
+  assert.equal(getQuizPrizeForScore(4)?.title, '50% Off');
+  assert.equal(getQuizPrizeForScore(5)?.title, 'Free Course');
+
+  const zeroAnswers = quiz.questions.map((question) => {
+    const source = getQuizQuestion(question.id);
+    const wrongOption = source.options.find((opt) => opt.id !== source.correctOptionId);
+    return { questionId: question.id, optionId: wrongOption.id };
+  });
+  const zeroFinish = await jsonRequest('/api/play/quiz/finish', {
+    method: 'POST',
+    body: { token: quiz.token, answers: zeroAnswers },
+  });
+  assert.equal(zeroFinish.status, 200);
+  const zeroResult = await zeroFinish.json();
+  assert.equal(zeroResult.score, 0);
+  assert.equal(zeroResult.claimable, false);
+  assert.equal(zeroResult.playId, null);
+  assert.equal(zeroResult.prize, null);
 
   const recordId = `play-${result.playId}`;
   assert.equal(await Record.countDocuments({ recordId }), 0);
@@ -495,7 +527,7 @@ test('quiz sessions contain five distinct questions and scores persist after cla
   assert.equal(saved.game, 'Quiz');
   assert.equal(saved.score, 5);
   assert.equal(saved.result, '5/5');
-  assert.equal(saved.reward, 'Quiz score 5/5');
+  assert.equal(saved.reward, 'Free Course');
   assert.equal(saved.email, 'quiz-player@example.com');
 
   const repeatClaim = await jsonRequest('/api/play/claim', {
@@ -536,4 +568,53 @@ test('an empty database can be restored from the JSONL backup log', async () => 
   assert.ok(restored);
   assert.equal(restored.name, 'Restored Player');
   assert.equal(restored.source, 'dart');
+});
+
+test('vercel serverless config uses /tmp storage and fails cleanly without MONGODB_URI', async () => {
+  const prevBackupDir = process.env.BACKUP_DIR;
+  const prevCsvPath = process.env.CSV_FILE_PATH;
+  const prevMongoUri = process.env.MONGODB_URI;
+  const prevCookieSecure = process.env.COOKIE_SECURE;
+  delete process.env.BACKUP_DIR;
+  delete process.env.CSV_FILE_PATH;
+  delete process.env.MONGODB_URI;
+  delete process.env.COOKIE_SECURE;
+
+  try {
+    const vercelConfig = loadConfig({
+      isVercel: true,
+      frontendUrl: 'https://biai-game.vercel.app',
+    });
+    assert.equal(vercelConfig.isVercel, true);
+    assert.ok(vercelConfig.backupDir.startsWith(os.tmpdir()));
+    assert.ok(vercelConfig.recordsCsvPath.startsWith(os.tmpdir()));
+    assert.equal(vercelConfig.mongodbUri, '');
+    assert.equal(vercelConfig.secureCookies, true);
+    assert.ok(vercelConfig.allowedOrigins.includes('https://biai-game.vercel.app'));
+
+    const handler = createServerlessHandler({ mongodbUri: '' });
+    const srv = http.createServer(handler);
+    await new Promise((resolve) => srv.listen(0, resolve));
+    const port = srv.address().port;
+
+    try {
+      const health = await fetch(`http://127.0.0.1:${port}/api/health`);
+      assert.equal(health.status, 200);
+      assert.deepEqual(await health.json(), { ok: true });
+
+      const unconfigured = await fetch(`http://127.0.0.1:${port}/api/play/wheel/spin`, {
+        method: 'POST',
+      });
+      assert.equal(unconfigured.status, 503);
+      const errBody = await unconfigured.json();
+      assert.match(errBody.error, /MONGODB_URI/i);
+    } finally {
+      await new Promise((resolve) => srv.close(resolve));
+    }
+  } finally {
+    if (prevBackupDir !== undefined) process.env.BACKUP_DIR = prevBackupDir;
+    if (prevCsvPath !== undefined) process.env.CSV_FILE_PATH = prevCsvPath;
+    if (prevMongoUri !== undefined) process.env.MONGODB_URI = prevMongoUri;
+    if (prevCookieSecure !== undefined) process.env.COOKIE_SECURE = prevCookieSecure;
+  }
 });

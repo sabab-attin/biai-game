@@ -1,6 +1,11 @@
 import crypto from 'node:crypto';
 import express from 'express';
-import { PRIZES, generateClaimCode, pickWeightedPrize } from '../config/prizes.js';
+import {
+  PRIZES,
+  generateClaimCode,
+  getQuizPrizeForScore,
+  pickWeightedPrize,
+} from '../config/prizes.js';
 import { getQuizQuestion, pickQuizQuestions } from '../config/quiz.js';
 import { PendingPlay } from '../models/PendingPlay.js';
 import { Player } from '../models/Player.js';
@@ -226,19 +231,41 @@ export function createApiRouter(config) {
         }
       }
 
+      const prize = getQuizPrizeForScore(score);
+      if (!prize) {
+        res.json({
+          playId: null,
+          score,
+          total: payload.qids.length,
+          claimable: false,
+          prize: null,
+        });
+        return;
+      }
+
       const playId = crypto.randomUUID();
+      const claimCode = generateClaimCode();
       const createdAt = new Date();
       await PendingPlay.create({
         playId,
         game: 'quiz',
         status: 'pending',
+        prizeId: prize.id,
+        prizeTitle: prize.title,
+        claimCode,
         score,
         total: payload.qids.length,
         createdAt,
         expiresAt: new Date(createdAt.getTime() + PLAY_CLAIM_TTL_MS),
       });
 
-      res.json({ playId, score, total: payload.qids.length });
+      res.json({
+        playId,
+        score,
+        total: payload.qids.length,
+        claimable: true,
+        prize: serializePrize(prize),
+      });
     } catch (error) {
       return next(error);
     }
@@ -352,7 +379,8 @@ export function createApiRouter(config) {
         recordInput.result = null;
         recordInput.score = null;
       } else {
-        recordInput.reward = `Quiz score ${pending.score}/${pending.total}`;
+        recordInput.reward =
+          pending.prizeTitle || `Quiz score ${pending.score}/${pending.total}`;
         recordInput.result = `${pending.score}/${pending.total}`;
         recordInput.score = pending.score;
       }
@@ -404,6 +432,7 @@ export function createApiRouter(config) {
         player: serializePlayerPublic(player),
         game: gameName(pending.game),
         claimCode: pending.claimCode || '',
+        prizeTitle: pending.prizeTitle || '',
         score: pending.score ?? null,
         total: pending.total ?? null,
       });

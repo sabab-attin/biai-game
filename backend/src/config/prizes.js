@@ -96,6 +96,20 @@ export const PRIZES = Object.freeze([
   },
 ]);
 
+export const QUIZ_PRIZE_IDS_BY_SCORE = Object.freeze({
+  1: 'stickers',
+  2: '10-off',
+  3: '25-off',
+  4: '50-off',
+  5: 'free-courses',
+});
+
+export function getQuizPrizeForScore(score) {
+  const prizeId = QUIZ_PRIZE_IDS_BY_SCORE[score];
+  if (!prizeId) return null;
+  return PRIZES.find((prize) => prize.id === prizeId) || null;
+}
+
 export function pickWeightedPrize() {
   const totalWeight = PRIZES.reduce((sum, prize) => sum + prize.weight, 0);
   const roll = crypto.randomInt(0, totalWeight);
