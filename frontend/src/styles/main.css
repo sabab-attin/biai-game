@@ -1364,11 +1364,6 @@
   line-height: 0.95;
 }
 
-.choice-screen__lead {
-  margin: 0;
-  color: var(--color-ink-2);
-}
-
 .choice-grid {
   width: 100%;
   display: grid;

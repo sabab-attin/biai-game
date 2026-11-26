@@ -4,12 +4,8 @@ defineEmits(['quiz', 'wheel']);
 
 <template>
   <section class="choice-screen" aria-labelledby="choice-title">
-    <p class="choice-screen__eyebrow">BIAI Carnival</p>
-    <h1 id="choice-title" class="choice-screen__title">PLAY FIRST.<br />SHARE DETAILS ONLY IF YOU WIN.</h1>
-    <p class="choice-screen__lead">
-      No sign-up needed. Pick a game, play your round, and we will only ask for your
-      contact details after you win so we can arrange your prize.
-    </p>
+    <p class="choice-screen__eyebrow">RISE ABOVE ALL 10X - BIAI</p>
+    <h1 id="choice-title" class="choice-screen__title">PLAY. PROGRESS. PROSPER.</h1>
 
     <div class="choice-grid">
       <button type="button" class="choice-card choice-card--wheel" @click="$emit('wheel')">
@@ -32,3 +28,4 @@ defineEmits(['quiz', 'wheel']);
     </div>
   </section>
 </template>
+
