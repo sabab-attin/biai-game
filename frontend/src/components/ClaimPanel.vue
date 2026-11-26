@@ -1,5 +1,6 @@
 <script setup>
 import { nextTick, onMounted, reactive, ref, watch } from 'vue';
+import WinnerPhotoBooth from './WinnerPhotoBooth.vue';
 
 const props = defineProps({
   result: {
@@ -7,6 +8,10 @@ const props = defineProps({
     required: true,
   },
   saved: {
+    type: Object,
+    default: null,
+  },
+  photoState: {
     type: Object,
     default: null,
   },
@@ -24,7 +29,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['claim', 'playAgain', 'backToGames']);
+const emit = defineEmits(['claim', 'retryPhoto', 'photoUpdated', 'playAgain', 'backToGames']);
 
 const form = reactive({
   name: '',
@@ -36,6 +41,8 @@ const hasPrizeReveal = () => Boolean(props.result?.prizeTitle);
 const isWheel = () => props.result?.game === 'wheel';
 
 const step = ref(hasPrizeReveal() ? 'reveal' : 'form');
+const photoDraft = ref(null);
+const postClaimBoothOpen = ref(false);
 const localError = ref('');
 const localField = ref(null);
 
@@ -45,7 +52,7 @@ const emailInputRef = ref(null);
 const claimCtaRef = ref(null);
 
 function focusActiveControl() {
-  if (props.saved) return;
+  if (props.saved || step.value === 'booth') return;
   if (hasPrizeReveal() && step.value === 'reveal') {
     claimCtaRef.value?.focus();
   } else {
@@ -57,6 +64,8 @@ watch(
   () => props.result,
   async (val) => {
     step.value = val?.prizeTitle ? 'reveal' : 'form';
+    photoDraft.value = null;
+    postClaimBoothOpen.value = false;
     localError.value = '';
     localField.value = null;
     await nextTick();
@@ -86,10 +95,30 @@ onMounted(async () => {
   focusActiveControl();
 });
 
-function openClaimForm() {
+function openCameraBeforeClaim() {
+  step.value = 'booth';
+  localError.value = '';
+  localField.value = null;
+}
+
+function handleBoothContinue(draft) {
+  photoDraft.value = draft || null;
   step.value = 'form';
   localError.value = '';
   localField.value = null;
+}
+
+function downloadSavedPhoto() {
+  const dataUrl = props.photoState?.dataUrl;
+  if (!dataUrl) return;
+  const mime = props.photoState?.mimeType || 'image/webp';
+  const ext = mime === 'image/webp' ? 'webp' : mime === 'image/png' ? 'png' : 'jpg';
+  const link = document.createElement('a');
+  link.href = dataUrl;
+  link.download = `biai-congratulations-winner.${ext}`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
 function handleSubmit() {
@@ -128,7 +157,7 @@ function handleSubmit() {
 
   localError.value = '';
   localField.value = null;
-  emit('claim', { name, phone, email });
+  emit('claim', { name, phone, email, photoDraft: photoDraft.value });
 }
 
 function clearFieldError(field) {
@@ -142,8 +171,23 @@ function clearFieldError(field) {
 <template>
   <div class="claim-overlay">
     <Transition name="panel-swap" mode="out-in" @after-enter="focusActiveControl">
+      <WinnerPhotoBooth
+        v-if="saved && postClaimBoothOpen"
+        key="post-claim-booth"
+        mode="after-claim"
+        :play-id="result.playId"
+        :game="result.game"
+        :prize-title="saved.prizeTitle || result.prizeTitle || ''"
+        :score="saved.score ?? result.score ?? null"
+        :total="saved.total ?? result.total ?? null"
+        :winner-name="saved.record?.name || saved.player?.name || 'BIAI Winner'"
+        @close="postClaimBoothOpen = false"
+        @photo-saved="emit('photoUpdated', $event)"
+        @play-again="emit('playAgain')"
+      />
+
       <section
-        v-if="saved"
+        v-else-if="saved"
         key="saved"
         class="claim-panel"
         role="dialog"
@@ -181,8 +225,53 @@ function clearFieldError(field) {
           </div>
         </dl>
 
+        <div v-if="photoState?.dataUrl" class="booth-saved-card">
+          <img
+            :src="photoState.dataUrl"
+            :alt="`BIAI Winner Photo for ${saved.record?.name || 'Winner'}`"
+            class="booth-saved-card__thumb"
+          />
+          <div class="booth-saved-card__body">
+            <p
+              class="booth-save-status"
+              :class="`booth-save-status--${photoState.status}`"
+              aria-live="polite"
+            >
+              <span>{{ photoState.message }}</span>
+              <button
+                v-if="photoState.status === 'error'"
+                type="button"
+                class="booth-link-btn"
+                @click="emit('retryPhoto')"
+              >
+                Retry
+              </button>
+            </p>
+            <div class="booth-saved-card__actions">
+              <button type="button" class="booth-chip-btn booth-chip-btn--solid" @click="downloadSavedPhoto">
+                Download photo
+              </button>
+              <button type="button" class="booth-chip-btn" @click="postClaimBoothOpen = true">
+                Retake / edit frame
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="booth-invite">
+          <div class="booth-invite__copy">
+            <strong>Capture your BIAI Winner Photo Frame</strong>
+            <span>
+              Snap a webcam selfie inside a branded BIAI congratulations frame celebrating your win!
+            </span>
+          </div>
+          <button type="button" class="btn btn--primary" @click="postClaimBoothOpen = true">
+            TAKE WINNER PHOTO
+          </button>
+        </div>
+
         <div class="btn-pair">
-          <button type="button" class="btn btn--primary" @click="emit('playAgain')">
+          <button type="button" class="btn" @click="emit('playAgain')">
             PLAY AGAIN
           </button>
           <button type="button" class="btn" @click="emit('backToGames')">
@@ -221,12 +310,13 @@ function clearFieldError(field) {
 
         <p class="claim-panel__lead">
           <template v-if="isWheel()">
-            Your spin landed on <strong>{{ result.prizeTitle }}</strong>! Tap below to enter your
-            details and claim this gift.
+            Your spin landed on <strong>{{ result.prizeTitle }}</strong>! Snap your BIAI winner
+            photo next, then enter your details at the end to claim.
           </template>
           <template v-else>
             You got <strong>{{ result.score }}/{{ result.total }}</strong> right and unlocked
-            <strong>{{ result.prizeTitle }}</strong>! Tap below to enter your details and claim this gift.
+            <strong>{{ result.prizeTitle }}</strong>! Snap your BIAI winner photo next, then enter
+            your details at the end to claim.
           </template>
         </p>
 
@@ -235,15 +325,35 @@ function clearFieldError(field) {
             ref="claimCtaRef"
             type="button"
             class="btn btn--primary"
-            @click="openClaimForm"
+            @click="openCameraBeforeClaim"
           >
-            CLAIM YOUR PRIZE →
+            OPEN CAMERA &amp; FRAME WIN →
           </button>
-          <button type="button" class="btn" @click="emit('backToGames')">
-            BACK TO GAMES
+          <button type="button" class="btn" @click="handleBoothContinue(null)">
+            SKIP CAMERA &amp; CLAIM
           </button>
         </div>
+
+        <button type="button" class="booth-link-btn" @click="emit('backToGames')">
+          Back to games
+        </button>
       </section>
+
+      <WinnerPhotoBooth
+        v-else-if="hasPrizeReveal() && step === 'booth'"
+        key="pre-claim-booth"
+        mode="before-claim"
+        :play-id="result.playId"
+        :game="result.game"
+        :prize-title="result.prizeTitle"
+        :score="result.score ?? null"
+        :total="result.total ?? null"
+        :initial-draft="photoDraft"
+        @back="step = 'reveal'"
+        @continue="handleBoothContinue"
+        @close="emit('backToGames')"
+        @play-again="emit('playAgain')"
+      />
 
       <section
         v-else
@@ -254,7 +364,13 @@ function clearFieldError(field) {
         aria-labelledby="claim-title"
       >
         <p class="claim-panel__eyebrow">
-          {{ hasPrizeReveal() ? 'Claim your gift' : 'Winner check-in' }}
+          {{
+            hasPrizeReveal()
+              ? isWheel()
+                ? 'Final step · Claim your prize'
+                : `Quiz score ${result.score}/${result.total} · Final step`
+              : 'Winner check-in'
+          }}
         </p>
         <h2 id="claim-title" class="claim-panel__title">
           <template v-if="hasPrizeReveal()">CLAIM {{ result.prizeTitle }}.</template>
@@ -263,10 +379,37 @@ function clearFieldError(field) {
         <p class="claim-panel__lead">
           {{
             hasPrizeReveal()
-              ? 'Add your details so we can save your gift and arrange collection.'
+              ? 'Add your details so we can save your prize and photo.'
               : 'Add your details so we can save your score and contact you about quiz prizes.'
           }}
         </p>
+
+        <div v-if="photoDraft?.dataUrl" class="claim-photo-pill">
+          <div class="claim-photo-pill__left">
+            <img
+              :src="photoDraft.dataUrl"
+              alt="Captured BIAI winner frame preview"
+              class="claim-photo-pill__thumb"
+            />
+            <div class="claim-photo-pill__copy">
+              <strong>Winner photo ready ({{ (photoDraft.sizeBytes / 1024).toFixed(1) }} KB)</strong>
+              <span>Your name will be stamped onto the frame when you submit.</span>
+            </div>
+          </div>
+          <button type="button" class="booth-chip-btn" @click="openCameraBeforeClaim">
+            Retake
+          </button>
+        </div>
+
+        <div v-else-if="hasPrizeReveal()" class="claim-photo-pill claim-photo-pill--empty">
+          <div class="claim-photo-pill__copy">
+            <strong>No winner photo taken yet</strong>
+            <span>Want a framed keepsake before claiming?</span>
+          </div>
+          <button type="button" class="booth-chip-btn" @click="openCameraBeforeClaim">
+            Open camera
+          </button>
+        </div>
 
         <form class="entry-form" novalidate @submit.prevent="handleSubmit">
           <div class="field">
@@ -355,7 +498,7 @@ function clearFieldError(field) {
               {{
                 isSubmitting
                   ? 'SAVING'
-                  : isWheel()
+                  : hasPrizeReveal()
                     ? 'CLAIM MY PRIZE'
                     : 'SAVE MY SCORE'
               }}

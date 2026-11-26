@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { claimPlay, fetchPrizes, spinWheel } from './api/client.js';
+import { claimPlay, fetchPrizes, saveWinnerPhoto, spinWheel } from './api/client.js';
 import { ADMIN_HASH_BASE } from './admin/path.js';
 import BiaiCoursesMarquee from './components/BiaiCoursesMarquee.vue';
 import CelebrationBlast from './components/CelebrationBlast.vue';
@@ -10,6 +10,7 @@ import NavBar from './components/NavBar.vue';
 import PrizeLedger from './components/PrizeLedger.vue';
 import QuizPanel from './components/QuizPanel.vue';
 import SpinningWheel from './components/SpinningWheel.vue';
+import { renderFramedWinnerPhoto } from './utils/photoFrame.js';
 import { playWinFanfare } from './utils/sound.js';
 
 const FALLBACK_PRIZES = [
@@ -32,11 +33,11 @@ const FALLBACK_PRIZES = [
     fgToken: '--color-ink',
   },
   {
-    id: '80-off',
-    title: '80% Off',
-    wheelLabel: '80% OFF',
+    id: '85-off',
+    title: '85% Off',
+    wheelLabel: '85% OFF',
     category: 'BIAI discount',
-    description: '80% off any BIAI course or bootcamp enrollment.',
+    description: '85% off any BIAI course or bootcamp enrollment.',
     bgToken: '--color-accent-2',
     fgToken: '--color-paper',
   },
@@ -110,6 +111,7 @@ const blastTrigger = ref(0);
 
 const claimResult = ref(null);
 const claimSaved = ref(null);
+const claimPhotoState = ref(null);
 const claimSubmitting = ref(false);
 const claimError = ref('');
 const claimErrorField = ref(null);
@@ -176,6 +178,7 @@ function resetClaim() {
   clearRevealTimer();
   claimResult.value = null;
   claimSaved.value = null;
+  claimPhotoState.value = null;
   claimSubmitting.value = false;
   claimError.value = '';
   claimErrorField.value = null;
@@ -316,8 +319,70 @@ function handleQuizFinished(result) {
   );
 }
 
+async function persistClaimedWinnerPhoto(playId, savedRecord, fallbackName, draft) {
+  if (!playId || !draft) return;
+
+  const themeId = draft.themeId || 'gold';
+  const winnerName = savedRecord?.record?.name || savedRecord?.player?.name || fallbackName || 'BIAI Winner';
+  let dataUrl = draft.dataUrl || '';
+  let mimeType = draft.mimeType || 'image/webp';
+  let sizeBytes = draft.sizeBytes || 0;
+
+  try {
+    if (draft.rawSnapshot?.source) {
+      const rendered = await renderFramedWinnerPhoto({
+        source: draft.rawSnapshot.source,
+        mirrored: Boolean(draft.rawSnapshot.mirrored),
+        themeId,
+        winnerName,
+      });
+      dataUrl = rendered.dataUrl;
+      mimeType = rendered.mimeType;
+      sizeBytes = rendered.sizeBytes;
+    }
+
+    await saveWinnerPhoto({
+      playId,
+      themeId,
+      imageDataUrl: dataUrl,
+    });
+
+    claimPhotoState.value = {
+      status: 'saved',
+      dataUrl,
+      mimeType,
+      sizeBytes,
+      themeId,
+      rawSnapshot: draft.rawSnapshot || null,
+      message: `Saved to BIAI gallery (${(sizeBytes / 1024).toFixed(1)} KB)`,
+    };
+  } catch (error) {
+    claimPhotoState.value = {
+      status: 'error',
+      dataUrl,
+      mimeType,
+      sizeBytes,
+      themeId,
+      rawSnapshot: draft.rawSnapshot || null,
+      message: error?.message || 'Could not save photo to gallery.',
+    };
+  }
+}
+
+async function handleRetryClaimPhoto() {
+  if (!claimResult.value?.playId || !claimPhotoState.value) return;
+  await persistClaimedWinnerPhoto(
+    claimResult.value.playId,
+    claimSaved.value,
+    claimSaved.value?.record?.name || 'BIAI Winner',
+    claimPhotoState.value
+  );
+}
+
 async function handleClaim(payload) {
   if (!claimResult.value || claimSubmitting.value) return;
+
+  const { photoDraft, ...claimFields } = payload;
 
   claimSubmitting.value = true;
   claimError.value = '';
@@ -326,8 +391,20 @@ async function handleClaim(payload) {
   try {
     const saved = await claimPlay({
       playId: claimResult.value.playId,
-      ...payload,
+      ...claimFields,
     });
+
+    if (photoDraft) {
+      await persistClaimedWinnerPhoto(
+        claimResult.value.playId,
+        saved,
+        claimFields.name,
+        photoDraft
+      );
+    } else {
+      claimPhotoState.value = null;
+    }
+
     claimSaved.value = saved;
     blastTrigger.value += 1;
   } catch (error) {
@@ -432,10 +509,13 @@ function handleHubClick() {
       v-if="claimResult"
       :result="claimResult"
       :saved="claimSaved"
+      :photo-state="claimPhotoState"
       :is-submitting="claimSubmitting"
       :error="claimError"
       :error-field="claimErrorField"
       @claim="handleClaim"
+      @retry-photo="handleRetryClaimPhoto"
+      @photo-updated="claimPhotoState = $event"
       @play-again="handlePlayAgain"
       @back-to-games="handleBackToGames"
     />
@@ -456,8 +536,8 @@ function handleHubClick() {
           <img
             class="footer__brand-logo"
             src="/biai-logo.png"
-            width="24"
-            height="24"
+            width="64"
+            height="64"
             alt=""
           />
           <span>BIAI</span>

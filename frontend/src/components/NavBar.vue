@@ -33,8 +33,8 @@ function goHome(selector = '#top') {
           <img
             class="nav__brand-logo"
             src="/biai-logo.png"
-            width="28"
-            height="28"
+            width="40"
+            height="40"
             alt=""
           />
           <span>BIAI</span>

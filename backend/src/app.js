@@ -34,7 +34,7 @@ export function createApp(config, { beforeApi } = {}) {
       },
     })(req, res, next)
   );
-  app.use(express.json({ limit: '64kb' }));
+  app.use(express.json({ limit: '100kb' }));
 
   if (typeof beforeApi === 'function') {
     app.use(beforeApi);

@@ -5,6 +5,7 @@ import { PendingPlay } from './models/PendingPlay.js';
 import { Player } from './models/Player.js';
 import { Record } from './models/Record.js';
 import { Spin } from './models/Spin.js';
+import { WinnerPhoto } from './models/WinnerPhoto.js';
 import { ensureAdminSeed } from './services/adminAuth.js';
 import { rebuildCsvFromMongo } from './services/csvStore.js';
 import { withRetry } from './services/retry.js';
@@ -47,6 +48,7 @@ export async function initDatabaseAndAdmin(config, { rebuildCsvOnPurge = true } 
     PendingPlay.init(),
     Player.init(),
     Spin.init(),
+    WinnerPhoto.init(),
   ]);
   await ensureAdminSeed(config);
 

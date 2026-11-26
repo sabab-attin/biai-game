@@ -9,7 +9,14 @@ import {
 import { getQuizQuestion, pickQuizQuestions } from '../config/quiz.js';
 import { PendingPlay } from '../models/PendingPlay.js';
 import { Player } from '../models/Player.js';
+import { Record } from '../models/Record.js';
 import { Spin } from '../models/Spin.js';
+import {
+  ALLOWED_PHOTO_MIME_TYPES,
+  MAX_WINNER_PHOTO_BYTES,
+  PHOTO_THEMES,
+  WinnerPhoto,
+} from '../models/WinnerPhoto.js';
 import {
   adminNotFound,
   authenticateAdmin,
@@ -59,6 +66,54 @@ function serializePlayerPublic(player) {
 
 function gameName(game) {
   return game === 'wheel' ? 'Wheel' : 'Quiz';
+}
+
+function hasValidImageMagic(buffer, mimeType) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 12) return false;
+  if (mimeType === 'image/webp') {
+    return (
+      buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+      buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+    );
+  }
+  if (mimeType === 'image/jpeg') {
+    return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  }
+  if (mimeType === 'image/png') {
+    return buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  }
+  return false;
+}
+
+function parseWinnerImageDataUrl(value) {
+  if (typeof value !== 'string') return null;
+  const match = /^data:(image\/(?:webp|jpeg|png));base64,([A-Za-z0-9+/=\s]+)$/i.exec(value.trim());
+  if (!match) return null;
+
+  const mimeType = match[1].toLowerCase();
+  if (!ALLOWED_PHOTO_MIME_TYPES.includes(mimeType)) return null;
+
+  const cleanBase64 = match[2].replace(/\s+/g, '');
+  const buffer = Buffer.from(cleanBase64, 'base64');
+  if (!buffer.length || !hasValidImageMagic(buffer, mimeType)) return null;
+
+  return { mimeType, buffer };
+}
+
+function serializeWinnerPhotoMeta(photo) {
+  return {
+    photoId: photo.photoId,
+    playId: photo.playId,
+    recordId: photo.recordId,
+    winnerName: photo.winnerName,
+    phone: photo.phone || '',
+    prizeTitle: photo.prizeTitle || '',
+    game: photo.game || '',
+    themeId: photo.themeId || 'gold',
+    mimeType: photo.mimeType,
+    sizeBytes: photo.sizeBytes,
+    capturedAt: photo.capturedAt,
+  };
 }
 
 export function createApiRouter(config) {
@@ -443,6 +498,68 @@ export function createApiRouter(config) {
           error: 'That phone number or email is already linked to another entry.',
         });
       }
+      return next(error);
+    }
+  });
+
+  router.post('/play/photo', async (req, res, next) => {
+    try {
+      const playId = String(req.body?.playId || '').trim();
+      if (!playId) {
+        return res.status(400).json({ error: 'Missing claimed play ID.' });
+      }
+
+      const parsed = parseWinnerImageDataUrl(req.body?.imageDataUrl);
+      if (!parsed) {
+        return res.status(400).json({ error: 'Invalid photo format. Expected WebP, JPEG, or PNG.' });
+      }
+
+      if (parsed.buffer.length > MAX_WINNER_PHOTO_BYTES) {
+        return res.status(413).json({
+          error: `Photo exceeds the ${Math.round(MAX_WINNER_PHOTO_BYTES / 1024)} KB limit.`,
+        });
+      }
+
+      const pending = await PendingPlay.findOne({ playId, status: 'claimed' }).lean();
+      if (!pending) {
+        return res.status(404).json({ error: 'Claimed result not found for this photo.' });
+      }
+
+      const recordId = `play-${playId}`;
+      const record = await Record.findOne({ recordId }).lean();
+      if (!record) {
+        return res.status(404).json({ error: 'Winner record not found for this photo.' });
+      }
+
+      const requestedTheme = String(req.body?.themeId || 'gold').trim().toLowerCase();
+      const themeId = PHOTO_THEMES.includes(requestedTheme) ? requestedTheme : 'gold';
+      const now = new Date();
+      const photoId = `photo-${playId}`;
+
+      const photo = await WinnerPhoto.findOneAndUpdate(
+        { playId },
+        {
+          $set: {
+            photoId,
+            playId,
+            recordId,
+            playerId: record.playerId || pending.playerId || null,
+            winnerName: record.name || 'BIAI Winner',
+            phone: record.phone || null,
+            prizeTitle: pending.prizeTitle || record.reward || null,
+            game: record.game || gameName(pending.game),
+            themeId,
+            mimeType: parsed.mimeType,
+            sizeBytes: parsed.buffer.length,
+            imageData: parsed.buffer,
+            capturedAt: now,
+          },
+        },
+        { upsert: true, new: true }
+      ).lean();
+
+      return res.status(201).json({ photo: serializeWinnerPhotoMeta(photo) });
+    } catch (error) {
       return next(error);
     }
   });

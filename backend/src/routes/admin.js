@@ -3,6 +3,7 @@ import { AdminAudit } from '../models/AdminAudit.js';
 import { Player } from '../models/Player.js';
 import { Record, RECORD_SOURCES } from '../models/Record.js';
 import { Spin } from '../models/Spin.js';
+import { WinnerPhoto } from '../models/WinnerPhoto.js';
 import { requireAdmin, clearAdminCookie } from '../services/adminAuth.js';
 import { logAdminAction, serializeAuditEntry } from '../services/audit.js';
 import { importRecordsFromCsv } from '../services/csvImport.js';
@@ -59,7 +60,7 @@ export function createAdminRouter(config) {
 
   router.post('/logout', async (req, res, next) => {
     try {
-      clearAdminCookie(res);
+      clearAdminCookie(res, config);
       await logAdminAction(req.admin.id, 'logout', {});
       res.json({ ok: true });
     } catch (error) {
@@ -306,6 +307,93 @@ export function createAdminRouter(config) {
       }
     }
   );
+
+  router.get('/photos', async (req, res, next) => {
+    try {
+      const limit = parseLimit(req.query.limit, 100, 250);
+      const photos = await WinnerPhoto.find()
+        .select('-imageData')
+        .sort({ capturedAt: -1 })
+        .limit(limit)
+        .lean();
+
+      res.json({
+        photos: photos.map((photo) => ({
+          photoId: photo.photoId,
+          playId: photo.playId,
+          recordId: photo.recordId,
+          winnerName: photo.winnerName,
+          phone: photo.phone || '',
+          prizeTitle: photo.prizeTitle || '',
+          game: photo.game || '',
+          themeId: photo.themeId || 'gold',
+          mimeType: photo.mimeType,
+          sizeBytes: photo.sizeBytes,
+          capturedAt: photo.capturedAt,
+        })),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/photos/:photoId/image', async (req, res, next) => {
+    try {
+      const photo = await WinnerPhoto.findOne({ photoId: req.params.photoId }).lean();
+      if (!photo || !photo.imageData) {
+        return res.status(404).json({ error: 'Winner photo not found.' });
+      }
+
+      const raw = Buffer.isBuffer(photo.imageData)
+        ? photo.imageData
+        : Buffer.from(photo.imageData.buffer || photo.imageData);
+
+      const ext =
+        photo.mimeType === 'image/webp' ? 'webp' : photo.mimeType === 'image/png' ? 'png' : 'jpg';
+      const safeName = String(photo.winnerName || 'winner')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'winner';
+      const filename = `biai-${safeName}-${photo.photoId.slice(-6)}.${ext}`;
+
+      res.setHeader('Content-Type', photo.mimeType);
+      res.setHeader('Content-Length', String(raw.length));
+      if (req.query.download === '1') {
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        await logAdminAction(req.admin.id, 'photo.download', {
+          photoId: photo.photoId,
+          name: photo.winnerName,
+        });
+      } else {
+        res.setHeader('Cache-Control', 'private, max-age=120');
+      }
+
+      return res.send(raw);
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.delete('/photos/:photoId', async (req, res, next) => {
+    try {
+      const existing = await WinnerPhoto.findOneAndDelete({
+        photoId: req.params.photoId,
+      })
+        .select('-imageData')
+        .lean();
+      if (!existing) {
+        return res.status(404).json({ error: 'Winner photo not found.' });
+      }
+
+      await logAdminAction(req.admin.id, 'photo.delete', {
+        photoId: existing.photoId,
+        name: existing.winnerName,
+      });
+      return res.json({ ok: true });
+    } catch (error) {
+      return next(error);
+    }
+  });
 
   router.get('/audit', async (req, res, next) => {
     try {

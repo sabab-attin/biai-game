@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 // Public prize list. Weights are server-side only and are never sent to clients.
-// Only spin-again (10%), 80% off (85%), and free-courses (5%) have non-zero
+// Only spin-again (10%), 85% off (85%), and free-courses (5%) have non-zero
 // weights; every other segment is display-only.
 export const PRIZES = Object.freeze([
   {
@@ -25,11 +25,11 @@ export const PRIZES = Object.freeze([
     fgToken: '--color-ink',
   },
   {
-    id: '80-off',
-    title: '80% Off',
-    wheelLabel: '80% OFF',
+    id: '85-off',
+    title: '85% Off',
+    wheelLabel: '85% OFF',
     category: 'BIAI discount',
-    description: '80% off any BIAI course or bootcamp enrollment.',
+    description: '85% off any BIAI course or bootcamp enrollment.',
     weight: 85,
     bgToken: '--color-accent-2',
     fgToken: '--color-paper',

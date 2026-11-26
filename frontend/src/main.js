@@ -1,4 +1,5 @@
 import { ADMIN_HASH_BASE, isAdminHash } from './admin/path.js';
+import { hasActiveAdminTab, logoutAdminKeepalive } from './admin/session.js';
 
 function renderNotFound() {
   const app = document.getElementById('app');
@@ -22,18 +23,25 @@ async function boot() {
     return;
   }
 
+  if (hasActiveAdminTab()) {
+    await logoutAdminKeepalive();
+  }
+
   const { mountPublic } = await import('./public/main.js');
   mountPublic();
 }
 
 // The footer admin link changes only the hash, so reload when the visitor switches
 // between the public event and the admin console. In-admin hash changes (login/base)
-// stay on the same surface and are handled by AdminApp.
+// stay on the same surface and are handled by AdminApp. Leaving the admin page logs out first.
 const bootedHash = window.location.hash || '';
 
-window.addEventListener('hashchange', () => {
+window.addEventListener('hashchange', async () => {
   const nextIsAdmin = isAdminHash(window.location.hash || '');
   if (nextIsAdmin !== isAdminHash(bootedHash)) {
+    if (isAdminHash(bootedHash) && !nextIsAdmin && hasActiveAdminTab()) {
+      await logoutAdminKeepalive();
+    }
     window.location.reload();
   }
 });

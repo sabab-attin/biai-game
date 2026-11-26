@@ -61,3 +61,10 @@ export function claimPlay(payload) {
     body: JSON.stringify(payload),
   });
 }
+
+export function saveWinnerPhoto(payload) {
+  return request('/play/photo', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}

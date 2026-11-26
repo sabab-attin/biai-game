@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { playPegTick, playWinFanfare } from '../utils/sound.js';
+import { playPegTick, playWinFanfare, resetSpinSound, unlockAudio } from '../utils/sound.js';
 
 const props = defineProps({
   prizes: {
@@ -235,10 +235,17 @@ function launchConfetti() {
   confettiRafId = requestAnimationFrame(step);
 }
 
-function triggerPegTick() {
+function handleHubClick() {
+  if (soundEnabled.value) {
+    unlockAudio();
+  }
+  emit('hubClick');
+}
+
+function triggerPegTick(speed = 0.5, progress = 0) {
   pointerTilt.value = -18;
   if (soundEnabled.value) {
-    playPegTick();
+    playPegTick({ speed, progress });
   }
   clearTimeout(pointerResetTimer);
   pointerResetTimer = setTimeout(() => {
@@ -248,6 +255,7 @@ function triggerPegTick() {
 
 function animateToSegment(targetIndex, resultPayload) {
   if (rafId) cancelAnimationFrame(rafId);
+  resetSpinSound();
 
   const count = props.prizes.length;
   const slice = (Math.PI * 2) / count;
@@ -286,7 +294,7 @@ function animateToSegment(targetIndex, resultPayload) {
     const pegBucket = Math.floor(current / pegStep);
     if (pegBucket !== lastPegBucket) {
       lastPegBucket = pegBucket;
-      triggerPegTick();
+      triggerPegTick(Math.max(0.08, Math.pow(1 - t, 1.8)), t);
     }
 
     drawWheel();
@@ -386,7 +394,7 @@ onBeforeUnmount(() => {
           :class="{ 'wheel-hub--ready': canSpin && !isSpinning }"
           :disabled="isSpinning || !canSpin"
           :aria-label="canSpin ? 'Spin the prize wheel' : 'Please wait for the wheel'"
-          @click="$emit('hubClick')"
+          @click="handleHubClick"
         >
           SPIN
         </button>

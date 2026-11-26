@@ -133,3 +133,56 @@ export function importRecordsCsv(csv) {
 export function fetchAuditLog() {
   return request('/admin/audit');
 }
+
+export function fetchAdminPhotos({ limit = 150 } = {}) {
+  return request(`/admin/photos?limit=${encodeURIComponent(String(limit))}`);
+}
+
+export function getAdminPhotoImageUrl(photoId, { download = false } = {}) {
+  const query = download ? '?download=1' : '';
+  return `${API_BASE}/admin/photos/${encodeURIComponent(photoId)}/image${query}`;
+}
+
+export async function fetchAdminPhotoBlobUrl(photoId) {
+  const token = getAdminToken();
+  const res = await fetch(getAdminPhotoImageUrl(photoId), {
+    credentials: 'include',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const error = new Error(`Could not load photo (${res.status}).`);
+    error.status = res.status;
+    throw error;
+  }
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
+export async function downloadAdminPhoto(photo) {
+  const token = getAdminToken();
+  const url = getAdminPhotoImageUrl(photo.photoId, { download: true });
+  const res = await fetch(url, {
+    credentials: 'include',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const error = new Error(`Could not download photo (${res.status}).`);
+    error.status = res.status;
+    throw error;
+  }
+  const blob = await res.blob();
+  const ext =
+    photo.mimeType === 'image/webp' ? 'webp' : photo.mimeType === 'image/png' ? 'png' : 'jpg';
+  const safeName =
+    String(photo.winnerName || 'winner')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'winner';
+  return { blob, filename: `biai-${safeName}.${ext}` };
+}
+
+export function deleteAdminPhoto(photoId) {
+  return request(`/admin/photos/${encodeURIComponent(photoId)}`, {
+    method: 'DELETE',
+  });
+}

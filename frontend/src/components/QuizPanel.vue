@@ -164,7 +164,7 @@ onMounted(loadQuiz);
       </div>
       <p class="quiz-result__score">{{ finalScore }}<span>/{{ total }}</span></p>
       <p v-if="wonPrize" class="quiz-result__body">
-        Gift unlocked: <strong>{{ wonPrize.title }}</strong>. Add your details in the claim popup to save it.
+        Gift unlocked: <strong>{{ wonPrize.title }}</strong>. View your win, snap your BIAI photo, then claim your prize!
       </p>
       <p v-else class="quiz-result__body">
         No gift unlocked this round. Play again — get 1 correct for Stickers up to 5/5 for a Free Course!

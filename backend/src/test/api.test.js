@@ -16,6 +16,7 @@ import { PendingPlay } from '../models/PendingPlay.js';
 import { Player } from '../models/Player.js';
 import { RECORD_SOURCES, Record } from '../models/Record.js';
 import { Spin } from '../models/Spin.js';
+import { WinnerPhoto } from '../models/WinnerPhoto.js';
 import { ensureAdminSeed } from '../services/adminAuth.js';
 import {
   RECORD_CSV_HEADER,
@@ -353,6 +354,7 @@ test('seeded admin can log in, read records, manage manual entries, and download
   const setCookie = login.headers.get('set-cookie') || '';
   adminCookie = setCookie.split(';')[0];
   assert.match(adminCookie, /^biai_admin=/);
+  assert.doesNotMatch(setCookie, /Max-Age=|Expires=/i);
 
   const session = await jsonRequest('/api/admin/session', {
     cookie: adminCookie,
@@ -431,6 +433,15 @@ test('seeded admin can log in, read records, manage manual entries, and download
   assert.ok((await AdminAudit.countDocuments({ action: 'dart.update' })) >= 1);
   assert.ok((await AdminAudit.countDocuments({ action: 'dart.delete' })) >= 1);
   assert.ok((await AdminAudit.countDocuments({ action: 'csv.download' })) >= 1);
+
+  const logout = await jsonRequest('/api/admin/logout', {
+    method: 'POST',
+    cookie: adminCookie,
+  });
+  assert.equal(logout.status, 200);
+  const clearedCookie = logout.headers.get('set-cookie') || '';
+  assert.match(clearedCookie, /^biai_admin=;/);
+  assert.ok((await AdminAudit.countDocuments({ action: 'logout' })) >= 1);
 });
 
 test('quiz sessions contain five distinct questions and scores persist after claiming', async () => {
@@ -491,6 +502,12 @@ test('quiz sessions contain five distinct questions and scores persist after cla
   assert.equal(getQuizPrizeForScore(4)?.title, '50% Off');
   assert.equal(getQuizPrizeForScore(5)?.title, 'Free Course');
 
+  const prizesRes = await jsonRequest('/api/prizes');
+  assert.equal(prizesRes.status, 200);
+  const prizesBody = await prizesRes.json();
+  assert.ok(prizesBody.prizes.some((prize) => prize.id === '85-off' && prize.title === '85% Off'));
+  assert.equal(prizesBody.prizes.some((prize) => prize.id === '80-off'), false);
+
   const zeroAnswers = quiz.questions.map((question) => {
     const source = getQuizQuestion(question.id);
     const wrongOption = source.options.find((opt) => opt.id !== source.correctOptionId);
@@ -539,6 +556,154 @@ test('quiz sessions contain five distinct questions and scores persist after cla
     },
   });
   assert.equal(repeatClaim.status, 409);
+});
+
+test('winner photo enforces <=50KB limit, stores in MongoDB, and streams/deletes in admin gallery', async () => {
+  const spin = await spinUntilClaimable();
+  const claim = await jsonRequest('/api/play/claim', {
+    method: 'POST',
+    body: {
+      playId: spin.playId,
+      name: 'Photo Winner',
+      phone: '01611223344',
+    },
+  });
+  assert.equal(claim.status, 200);
+
+  // Valid minimal RIFF/WEBP payload well under 50 KB
+  const validWebpPayload = Buffer.concat([
+    Buffer.from('RIFF\x24\x00\x00\x00WEBPVP8 ', 'ascii'),
+    Buffer.alloc(32, 0xab),
+  ]);
+  const validDataUrl = `data:image/webp;base64,${validWebpPayload.toString('base64')}`;
+
+  // Oversized (> 50 KB) payload must be rejected
+  const oversizedBuffer = Buffer.concat([
+    Buffer.from('RIFF\x24\x00\x00\x00WEBPVP8 ', 'ascii'),
+    Buffer.alloc(52 * 1024, 0xcd),
+  ]);
+  const oversizedRes = await jsonRequest('/api/play/photo', {
+    method: 'POST',
+    body: {
+      playId: spin.playId,
+      themeId: 'gold',
+      imageDataUrl: `data:image/webp;base64,${oversizedBuffer.toString('base64')}`,
+    },
+  });
+  assert.equal(oversizedRes.status, 413);
+
+  const badFormat = await jsonRequest('/api/play/photo', {
+    method: 'POST',
+    body: {
+      playId: spin.playId,
+      themeId: 'gold',
+      imageDataUrl: 'data:text/plain;base64,aGVsbG8=',
+    },
+  });
+  assert.equal(badFormat.status, 400);
+
+  const missingPlay = await jsonRequest('/api/play/photo', {
+    method: 'POST',
+    body: {
+      playId: 'nonexistent-play-id',
+      themeId: 'gold',
+      imageDataUrl: validDataUrl,
+    },
+  });
+  assert.equal(missingPlay.status, 404);
+
+  const savedRes = await jsonRequest('/api/play/photo', {
+    method: 'POST',
+    body: {
+      playId: spin.playId,
+      themeId: 'crimson',
+      imageDataUrl: validDataUrl,
+    },
+  });
+  assert.equal(savedRes.status, 201);
+  const savedBody = await savedRes.json();
+  assert.equal(savedBody.photo.winnerName, 'Photo Winner');
+  assert.equal(savedBody.photo.themeId, 'crimson');
+  assert.equal(savedBody.photo.sizeBytes, validWebpPayload.length);
+  assert.ok(savedBody.photo.sizeBytes <= 50 * 1024);
+
+  const docCount = await WinnerPhoto.countDocuments({ playId: spin.playId });
+  assert.equal(docCount, 1);
+
+  const login = await jsonRequest('/api/admin-login', {
+    method: 'POST',
+    body: TEST_ADMIN,
+  });
+  assert.equal(login.status, 200);
+  const cookie = (login.headers.get('set-cookie') || '').split(';')[0];
+
+  const listRes = await jsonRequest('/api/admin/photos', { cookie });
+  assert.equal(listRes.status, 200);
+  const listBody = await listRes.json();
+  assert.ok(listBody.photos.some((item) => item.photoId === savedBody.photo.photoId));
+
+  const downloadRes = await fetch(
+    `${baseUrl}/api/admin/photos/${savedBody.photo.photoId}/image?download=1`,
+    { headers: { Cookie: cookie } }
+  );
+  assert.equal(downloadRes.status, 200);
+  assert.equal(downloadRes.headers.get('content-type'), 'image/webp');
+  assert.match(downloadRes.headers.get('content-disposition') || '', /attachment; filename="biai-photo-winner-/);
+  const downloadedBytes = Buffer.from(await downloadRes.arrayBuffer());
+  assert.deepEqual(downloadedBytes, validWebpPayload);
+
+  const deleteRes = await jsonRequest(`/api/admin/photos/${savedBody.photo.photoId}`, {
+    method: 'DELETE',
+    cookie,
+  });
+  assert.equal(deleteRes.status, 200);
+  assert.equal(await WinnerPhoto.countDocuments({ playId: spin.playId }), 0);
+
+  // Quiz winners also save sharp <=50KB photos to MongoDB and appear in Admin gallery
+  const quizStart = await jsonRequest('/api/play/quiz/start', { method: 'POST' });
+  assert.equal(quizStart.status, 200);
+  const quizData = await quizStart.json();
+  const quizAnswers = quizData.questions.map((q) => ({
+    questionId: q.id,
+    optionId: getQuizQuestion(q.id).correctOptionId,
+  }));
+  const quizFinish = await jsonRequest('/api/play/quiz/finish', {
+    method: 'POST',
+    body: { token: quizData.token, answers: quizAnswers },
+  });
+  assert.equal(quizFinish.status, 200);
+  const quizResult = await quizFinish.json();
+  assert.equal(quizResult.claimable, true);
+
+  const quizClaim = await jsonRequest('/api/play/claim', {
+    method: 'POST',
+    body: {
+      playId: quizResult.playId,
+      name: 'Quiz Photo Winner',
+      phone: '01622334455',
+    },
+  });
+  assert.equal(quizClaim.status, 200);
+
+  const quizPhotoRes = await jsonRequest('/api/play/photo', {
+    method: 'POST',
+    body: {
+      playId: quizResult.playId,
+      themeId: 'navy',
+      imageDataUrl: validDataUrl,
+    },
+  });
+  assert.equal(quizPhotoRes.status, 201);
+  const quizPhotoBody = await quizPhotoRes.json();
+  assert.equal(quizPhotoBody.photo.game, 'Quiz');
+  assert.equal(quizPhotoBody.photo.prizeTitle, 'Free Course');
+  assert.equal(quizPhotoBody.photo.winnerName, 'Quiz Photo Winner');
+
+  const delQuizPhoto = await jsonRequest(`/api/admin/photos/${quizPhotoBody.photo.photoId}`, {
+    method: 'DELETE',
+    cookie,
+  });
+  assert.equal(delQuizPhoto.status, 200);
 });
 
 test('an empty database can be restored from the JSONL backup log', async () => {
