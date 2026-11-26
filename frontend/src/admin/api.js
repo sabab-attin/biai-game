@@ -109,8 +109,10 @@ export function rebuildAdminCsv() {
 }
 
 export async function downloadAdminCsv() {
+  const token = getAdminToken();
   const res = await fetch(`${API_BASE}/admin/csv/download`, {
     credentials: 'include',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) {
     const error = new Error(`Could not download CSV (${res.status}).`);
