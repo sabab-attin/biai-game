@@ -445,18 +445,22 @@ test('seeded admin can log in, read records, manage manual entries, and download
 });
 
 test('quiz sessions contain five distinct questions and scores persist after claiming', async () => {
-  assert.equal(QUIZ_QUESTIONS.length, 30);
+  assert.equal(QUIZ_QUESTIONS.length, 20);
   const seenIds = new Set();
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const questions = pickQuizQuestions(5);
     assert.equal(questions.length, 5);
     assert.equal(new Set(questions.map((question) => question.id)).size, 5);
+    const intermediateCount = questions.filter(
+      (question) => getQuizQuestion(question.id)?.level === 'intermediate'
+    ).length;
+    assert.ok(intermediateCount <= 1, 'expected at most 1 intermediate question per quiz');
     for (const question of questions) {
       seenIds.add(question.id);
       assert.equal(new Set(question.options.map((option) => option.id)).size, 4);
     }
   }
-  assert.ok(seenIds.size > 10, 'expected shuffled questions across the 30-question bank');
+  assert.ok(seenIds.size > 10, 'expected shuffled questions across the 20-question bank');
 
   const start = await jsonRequest('/api/play/quiz/start', { method: 'POST' });
   assert.equal(start.status, 200);

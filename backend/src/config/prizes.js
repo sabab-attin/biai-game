@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
 
 // Public prize list. Weights are server-side only and are never sent to clients.
-// Only spin-again (10%), 85% off (85%), and free-courses (5%) have non-zero
-// weights; every other segment is display-only.
+// Active wheel weights: 85% Off (35%), Free Course (35%), Stickers (20%),
+// Spin Again (5%), and Chocolate (5%). All other segments are display-only (weight 0).
 export const PRIZES = Object.freeze([
   {
     id: 'spin-again',
@@ -10,7 +10,7 @@ export const PRIZES = Object.freeze([
     wheelLabel: 'SPIN AGAIN',
     category: 'Bonus turn',
     description: 'One more turn at the wheel — the carnival gives you another go.',
-    weight: 10,
+    weight: 5,
     bgToken: '--color-navy',
     fgToken: '--color-paper',
   },
@@ -30,7 +30,7 @@ export const PRIZES = Object.freeze([
     wheelLabel: '85% OFF',
     category: 'BIAI discount',
     description: '85% off any BIAI course or bootcamp enrollment.',
-    weight: 85,
+    weight: 35,
     bgToken: '--color-accent-2',
     fgToken: '--color-paper',
   },
@@ -70,7 +70,7 @@ export const PRIZES = Object.freeze([
     wheelLabel: 'FREE COURSE',
     category: 'BIAI pass',
     description: 'Complimentary seat in a live BIAI applied AI workshop or cohort session.',
-    weight: 5,
+    weight: 35,
     bgToken: '--color-accent-2',
     fgToken: '--color-paper',
   },
@@ -80,7 +80,7 @@ export const PRIZES = Object.freeze([
     wheelLabel: 'STICKERS',
     category: 'Builder pack',
     description: 'Die-cut screen-printed BIAI builder sticker sheet from this edition.',
-    weight: 0,
+    weight: 20,
     bgToken: '--color-paper',
     fgToken: '--color-ink',
   },
@@ -93,6 +93,16 @@ export const PRIZES = Object.freeze([
     weight: 0,
     bgToken: '--color-paper-3',
     fgToken: '--color-ink',
+  },
+  {
+    id: 'chocolate',
+    title: 'Chocolate',
+    wheelLabel: 'CHOCOLATE',
+    category: 'Sweet treat',
+    description: 'A carnival chocolate treat from the BIAI booth.',
+    weight: 5,
+    bgToken: '--color-accent',
+    fgToken: '--color-accent-ink',
   },
 ]);
 
