@@ -5,7 +5,9 @@ import { PendingPlay } from './models/PendingPlay.js';
 import { Player } from './models/Player.js';
 import { Record } from './models/Record.js';
 import { Spin } from './models/Spin.js';
+import { WheelConfig } from './models/WheelConfig.js';
 import { WinnerPhoto } from './models/WinnerPhoto.js';
+import { setWheelWeightOverrides } from './config/prizes.js';
 import { ensureAdminSeed } from './services/adminAuth.js';
 import { rebuildCsvFromMongo } from './services/csvStore.js';
 import { withRetry } from './services/retry.js';
@@ -48,9 +50,19 @@ export async function initDatabaseAndAdmin(config, { rebuildCsvOnPurge = true } 
     PendingPlay.init(),
     Player.init(),
     Spin.init(),
+    WheelConfig.init(),
     WinnerPhoto.init(),
   ]);
   await ensureAdminSeed(config);
+
+  const savedWheelConfig = await WheelConfig.findOne({ key: 'wheel-weights' }).lean();
+  if (savedWheelConfig?.weights) {
+    try {
+      setWheelWeightOverrides(savedWheelConfig.weights);
+    } catch (error) {
+      console.warn('[wheel] Ignoring invalid saved wheel weights:', error.message);
+    }
+  }
 
   const removedGuests = await Record.deleteMany({ source: 'guest' });
   const removedGuestPlayers = await Player.collection.deleteMany({ isGuest: true });

@@ -13,10 +13,13 @@ import {
   fetchAdminRecords,
   fetchAuditLog,
   fetchDartRecords,
+  fetchWheelOdds,
   importRecordsCsv,
   logoutAdmin,
   rebuildAdminCsv,
+  resetWheelOdds,
   updateDartRecord,
+  updateWheelOdds,
 } from './api.js';
 import { clearAdminMarkers } from './session.js';
 
@@ -35,6 +38,10 @@ const dartRecords = ref([]);
 const winnerPhotos = ref([]);
 const csvText = ref('');
 const auditEntries = ref([]);
+const wheelOdds = ref([]);
+const oddsDraft = reactive({});
+const oddsDirty = ref(false);
+const isSavingOdds = ref(false);
 const recordSource = ref('');
 const searchQuery = ref('');
 const isLoading = ref(false);
@@ -144,12 +151,13 @@ async function refreshAll({ quiet = false } = {}) {
   if (!quiet) errorMsg.value = '';
 
   try {
-    const [recordsData, dartData, photosData, csv, auditData] = await Promise.all([
+    const [recordsData, dartData, photosData, csv, auditData, oddsData] = await Promise.all([
       fetchAdminRecords({ limit: 250 }),
       fetchDartRecords(),
       fetchAdminPhotos({ limit: 150 }),
       fetchAdminCsv(),
       fetchAuditLog(),
+      fetchWheelOdds(),
     ]);
 
     records.value = recordsData.records;
@@ -158,6 +166,7 @@ async function refreshAll({ quiet = false } = {}) {
     void syncPhotoBlobUrls(winnerPhotos.value);
     csvText.value = typeof csv === 'string' ? csv : '';
     auditEntries.value = auditData.entries;
+    applyWheelOddsPayload(oddsData, { preserveDraft: oddsDirty.value });
   } catch (error) {
     if (error.status === 404) {
       emit('expired');
@@ -167,6 +176,83 @@ async function refreshAll({ quiet = false } = {}) {
   } finally {
     refreshing = false;
     isLoading.value = false;
+  }
+}
+
+function applyWheelOddsPayload(payload, { preserveDraft = false } = {}) {
+  const list = Array.isArray(payload?.prizes) ? payload.prizes : [];
+  wheelOdds.value = list;
+  if (!preserveDraft) {
+    for (const item of list) {
+      oddsDraft[item.id] = item.weight;
+    }
+    oddsDirty.value = false;
+  }
+}
+
+const draftTotalWeight = computed(() =>
+  wheelOdds.value.reduce((sum, item) => {
+    const val = Number(oddsDraft[item.id]);
+    return sum + (Number.isFinite(val) && val > 0 ? val : 0);
+  }, 0)
+);
+
+const activeOddsCount = computed(
+  () => wheelOdds.value.filter((item) => Number(item.weight) > 0).length
+);
+
+function draftPercent(id) {
+  const total = draftTotalWeight.value;
+  if (total <= 0) return '0.0%';
+  const val = Number(oddsDraft[id]);
+  if (!Number.isFinite(val) || val <= 0) return '0.0%';
+  return `${((val / total) * 100).toFixed(1)}%`;
+}
+
+async function saveOdds() {
+  if (isSavingOdds.value || draftTotalWeight.value <= 0) return;
+  isSavingOdds.value = true;
+  errorMsg.value = '';
+  successMsg.value = '';
+  try {
+    const weights = {};
+    for (const item of wheelOdds.value) {
+      const val = Number(oddsDraft[item.id]);
+      weights[item.id] = Number.isFinite(val) && val >= 0 ? val : 0;
+    }
+    const updated = await updateWheelOdds(weights);
+    applyWheelOddsPayload(updated, { preserveDraft: false });
+    successMsg.value = 'Wheel odds updated — live for the next spin.';
+    await refreshAll({ quiet: true });
+  } catch (error) {
+    if (error.status === 404) {
+      emit('expired');
+      return;
+    }
+    errorMsg.value = error.message || 'Could not update wheel odds.';
+  } finally {
+    isSavingOdds.value = false;
+  }
+}
+
+async function resetOdds() {
+  if (isSavingOdds.value) return;
+  isSavingOdds.value = true;
+  errorMsg.value = '';
+  successMsg.value = '';
+  try {
+    const reset = await resetWheelOdds();
+    applyWheelOddsPayload(reset, { preserveDraft: false });
+    successMsg.value = 'Wheel odds reset to defaults.';
+    await refreshAll({ quiet: true });
+  } catch (error) {
+    if (error.status === 404) {
+      emit('expired');
+      return;
+    }
+    errorMsg.value = error.message || 'Could not reset wheel odds.';
+  } finally {
+    isSavingOdds.value = false;
   }
 }
 
@@ -560,6 +646,7 @@ onBeforeUnmount(() => {
             { key: 'records', label: 'RECORDS', count: records.length },
             { key: 'photos', label: 'WINNER PHOTOS', count: winnerPhotos.length },
             { key: 'dart', label: 'MANUAL ENTRY', count: dartRecords.length },
+            { key: 'odds', label: 'WHEEL ODDS', count: activeOddsCount },
             { key: 'audit', label: 'AUDIT LOG', count: auditEntries.length },
           ]"
           :key="tab.key"
@@ -940,6 +1027,68 @@ onBeforeUnmount(() => {
           </article>
         </div>
         <p v-else class="empty-state admin-empty">No winner photos saved yet.</p>
+      </div>
+    </section>
+
+    <section v-else-if="activeTab === 'odds'" class="admin-panel">
+      <div class="admin-toolbar">
+        <div class="admin-toolbar__filters">
+          <span class="admin-toolbar__summary">
+            Live wheel weights · Total: <strong class="num">{{ draftTotalWeight }}</strong>
+          </span>
+        </div>
+        <div class="admin-row-actions">
+          <button
+            type="button"
+            class="btn btn--compact"
+            :disabled="isSavingOdds"
+            @click="resetOdds"
+          >
+            RESET DEFAULTS
+          </button>
+          <button
+            type="button"
+            class="btn btn--compact btn--primary"
+            :disabled="isSavingOdds || draftTotalWeight <= 0"
+            @click="saveOdds"
+          >
+            {{ isSavingOdds ? 'SAVING…' : 'SAVE ODDS' }}
+          </button>
+        </div>
+      </div>
+
+      <div class="admin-table-wrap admin-stage" tabindex="0">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Wheel Option</th>
+              <th>Category</th>
+              <th>Weight</th>
+              <th>Live Chance</th>
+              <th>Default</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in wheelOdds" :key="item.id">
+              <td><strong>{{ item.title }}</strong></td>
+              <td>{{ item.category }}</td>
+              <td>
+                <input
+                  v-model.number="oddsDraft[item.id]"
+                  type="number"
+                  min="0"
+                  step="1"
+                  class="field__input"
+                  style="max-width: 100px; padding: 6px 10px;"
+                  :aria-label="`Weight for ${item.title}`"
+                  @input="oddsDirty = true"
+                />
+              </td>
+              <td class="num"><strong>{{ draftPercent(item.id) }}</strong></td>
+              <td class="num">{{ item.defaultWeight }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
 

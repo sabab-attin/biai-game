@@ -13,3 +13,5 @@ backend/backups/
 .logs/
 .DS_Store
 .hallmark/
+.vercel
+.env*

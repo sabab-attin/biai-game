@@ -186,3 +186,20 @@ export function deleteAdminPhoto(photoId) {
     method: 'DELETE',
   });
 }
+
+export function fetchWheelOdds() {
+  return request('/admin/wheel-odds');
+}
+
+export function updateWheelOdds(weights) {
+  return request('/admin/wheel-odds', {
+    method: 'PUT',
+    body: JSON.stringify({ weights }),
+  });
+}
+
+export function resetWheelOdds() {
+  return request('/admin/wheel-odds/reset', {
+    method: 'POST',
+  });
+}

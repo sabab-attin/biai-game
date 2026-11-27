@@ -1,8 +1,14 @@
 import express from 'express';
+import {
+  getEffectivePrizeWeights,
+  resetWheelWeightOverrides,
+  setWheelWeightOverrides,
+} from '../config/prizes.js';
 import { AdminAudit } from '../models/AdminAudit.js';
 import { Player } from '../models/Player.js';
 import { Record, RECORD_SOURCES } from '../models/Record.js';
 import { Spin } from '../models/Spin.js';
+import { WheelConfig } from '../models/WheelConfig.js';
 import { WinnerPhoto } from '../models/WinnerPhoto.js';
 import { requireAdmin, clearAdminCookie } from '../services/adminAuth.js';
 import { logAdminAction, serializeAuditEntry } from '../services/audit.js';
@@ -402,6 +408,74 @@ export function createAdminRouter(config) {
       res.json({ entries: entries.map(serializeAuditEntry) });
     } catch (error) {
       next(error);
+    }
+  });
+
+  router.get('/wheel-odds', async (_req, res, next) => {
+    try {
+      const saved = await WheelConfig.findOne({ key: 'wheel-weights' }).lean();
+      if (saved?.weights) {
+        try {
+          setWheelWeightOverrides(saved.weights);
+        } catch {
+          // Keep current active weights if saved weights are invalid.
+        }
+      }
+      res.json(getEffectivePrizeWeights());
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.put('/wheel-odds', async (req, res, next) => {
+    try {
+      const weights = req.body?.weights;
+      if (!weights || typeof weights !== 'object' || Array.isArray(weights)) {
+        return res.status(400).json({ error: 'Provide a weights map for wheel options.' });
+      }
+
+      let updated;
+      try {
+        updated = setWheelWeightOverrides(weights);
+      } catch (error) {
+        return res.status(400).json({ error: error.message });
+      }
+
+      const persistedMap = {};
+      for (const prize of updated.prizes) {
+        persistedMap[prize.id] = prize.weight;
+      }
+
+      await WheelConfig.findOneAndUpdate(
+        { key: 'wheel-weights' },
+        {
+          $set: {
+            weights: persistedMap,
+            updatedBy: req.admin.username,
+            updatedAt: new Date(),
+          },
+        },
+        { upsert: true, new: true }
+      );
+
+      await logAdminAction(req.admin.id, 'wheel.odds.update', {
+        weights: persistedMap,
+      });
+
+      return res.json(updated);
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.post('/wheel-odds/reset', async (req, res, next) => {
+    try {
+      await WheelConfig.deleteOne({ key: 'wheel-weights' });
+      const reset = resetWheelWeightOverrides();
+      await logAdminAction(req.admin.id, 'wheel.odds.reset', {});
+      return res.json(reset);
+    } catch (error) {
+      return next(error);
     }
   });
 
