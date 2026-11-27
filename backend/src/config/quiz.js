@@ -278,8 +278,10 @@ export function pickQuizQuestions(count = 5, rng = Math.random) {
   const easyPool = QUIZ_QUESTIONS.filter((q) => q.level === 'easy');
   const intermediatePool = QUIZ_QUESTIONS.filter((q) => q.level === 'intermediate');
 
-  // Include 1 intermediate question roughly half the time (with 4 easy); otherwise all easy.
-  const includeIntermediate = intermediatePool.length > 0 && rng() < 0.5 ? 1 : 0;
+  // Include intermediate questions roughly half the time (~1 per 5 questions); otherwise all easy.
+  const maxIntermediate = Math.min(intermediatePool.length, Math.max(1, Math.round(safeCount / 5)));
+  const includeIntermediate =
+    intermediatePool.length > 0 && safeCount >= 2 && rng() < 0.5 ? maxIntermediate : 0;
   const easyCount = Math.min(safeCount - includeIntermediate, easyPool.length);
   const intermediateCount = Math.min(safeCount - easyCount, intermediatePool.length);
 

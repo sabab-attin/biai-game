@@ -181,9 +181,110 @@ export function resetWheelWeightOverrides() {
 }
 
 export function getQuizPrizeForScore(score) {
-  const prizeId = QUIZ_PRIZE_IDS_BY_SCORE[score];
-  if (!prizeId) return null;
+  const key = String(score);
+  const prizeId = activeQuizSettings
+    ? activeQuizSettings.rewardsByScore.get(key) || ''
+    : QUIZ_PRIZE_IDS_BY_SCORE[score] || '';
+  if (!prizeId || prizeId === 'none' || prizeId === 'nothing') return null;
   return PRIZES.find((prize) => prize.id === prizeId) || null;
+}
+
+let activeQuizSettings = null;
+export const DEFAULT_QUIZ_QUESTION_COUNT = 5;
+export const MAX_QUIZ_QUESTION_COUNT = 20;
+
+function defaultQuizRewardsObject() {
+  return Object.fromEntries(
+    Object.entries(QUIZ_PRIZE_IDS_BY_SCORE).map(([k, v]) => [String(k), v])
+  );
+}
+
+export function getQuizQuestionCount() {
+  return activeQuizSettings ? activeQuizSettings.questionCount : DEFAULT_QUIZ_QUESTION_COUNT;
+}
+
+export function getPublicQuizRewardTiers() {
+  const count = getQuizQuestionCount();
+  const tiers = [];
+  for (let score = 1; score <= count; score += 1) {
+    const prize = getQuizPrizeForScore(score);
+    if (prize) {
+      tiers.push({ score, title: prize.title });
+    }
+  }
+  return tiers;
+}
+
+export function getEffectiveQuizSettings() {
+  const questionCount = getQuizQuestionCount();
+  const rewardsByScore = {};
+  for (let score = 1; score <= Math.max(questionCount, DEFAULT_QUIZ_QUESTION_COUNT); score += 1) {
+    const key = String(score);
+    rewardsByScore[key] = activeQuizSettings
+      ? activeQuizSettings.rewardsByScore.get(key) || ''
+      : QUIZ_PRIZE_IDS_BY_SCORE[score] || '';
+  }
+
+  return {
+    questionCount,
+    maxQuestions: MAX_QUIZ_QUESTION_COUNT,
+    rewardsByScore,
+    availablePrizes: PRIZES.filter((p) => p.id !== 'spin-again' && p.id !== 'nothing').map(
+      (p) => ({ id: p.id, title: p.title })
+    ),
+    defaults: {
+      questionCount: DEFAULT_QUIZ_QUESTION_COUNT,
+      rewardsByScore: defaultQuizRewardsObject(),
+    },
+    isCustom: Boolean(activeQuizSettings),
+  };
+}
+
+export function setQuizSettings(input = {}, maxQuestions = MAX_QUIZ_QUESTION_COUNT) {
+  const count = Number(input?.questionCount ?? DEFAULT_QUIZ_QUESTION_COUNT);
+  if (!Number.isInteger(count) || count < 1 || count > maxQuestions) {
+    throw new Error(`Question count must be a whole number between 1 and ${maxQuestions}.`);
+  }
+
+  const rawRewards = input?.rewardsByScore;
+  const entries =
+    rawRewards instanceof Map
+      ? Array.from(rawRewards.entries())
+      : rawRewards && typeof rawRewards === 'object'
+        ? Object.entries(rawRewards)
+        : Object.entries(defaultQuizRewardsObject());
+
+  const validPrizeIds = new Set(
+    PRIZES.filter((p) => p.id !== 'spin-again' && p.id !== 'nothing').map((p) => p.id)
+  );
+  const rewardsMap = new Map();
+
+  for (const [rawScore, rawPrizeId] of entries) {
+    const score = Number(rawScore);
+    if (!Number.isInteger(score) || score < 1 || score > maxQuestions) {
+      continue;
+    }
+    const prizeId = String(rawPrizeId || '').trim();
+    if (!prizeId || prizeId === 'none' || prizeId === 'nothing') {
+      rewardsMap.set(String(score), '');
+      continue;
+    }
+    if (!validPrizeIds.has(prizeId)) {
+      throw new Error(`Invalid quiz reward "${prizeId}" for score ${score}.`);
+    }
+    rewardsMap.set(String(score), prizeId);
+  }
+
+  activeQuizSettings = {
+    questionCount: count,
+    rewardsByScore: rewardsMap,
+  };
+  return getEffectiveQuizSettings();
+}
+
+export function resetQuizSettings() {
+  activeQuizSettings = null;
+  return getEffectiveQuizSettings();
 }
 
 export function pickWeightedPrize() {

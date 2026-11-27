@@ -3,7 +3,9 @@ import express from 'express';
 import {
   PRIZES,
   generateClaimCode,
+  getPublicQuizRewardTiers,
   getQuizPrizeForScore,
+  getQuizQuestionCount,
   pickWeightedPrize,
 } from '../config/prizes.js';
 import { getQuizQuestion, pickQuizQuestions } from '../config/quiz.js';
@@ -219,7 +221,7 @@ export function createApiRouter(config) {
 
   router.post('/play/quiz/start', async (_req, res, next) => {
     try {
-      const questions = pickQuizQuestions(5);
+      const questions = pickQuizQuestions(getQuizQuestionCount());
       const token = createQuizToken(
         {
           questionIds: questions.map((question) => question.id),
@@ -228,7 +230,12 @@ export function createApiRouter(config) {
         config.sessionSecret
       );
 
-      res.json({ token, questions, total: questions.length });
+      res.json({
+        token,
+        questions,
+        total: questions.length,
+        rewardTiers: getPublicQuizRewardTiers(),
+      });
     } catch (error) {
       return next(error);
     }

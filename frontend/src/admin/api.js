@@ -203,3 +203,20 @@ export function resetWheelOdds() {
     method: 'POST',
   });
 }
+
+export function fetchQuizSettings() {
+  return request('/admin/quiz-settings');
+}
+
+export function updateQuizSettings(payload) {
+  return request('/admin/quiz-settings', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function resetQuizSettings() {
+  return request('/admin/quiz-settings/reset', {
+    method: 'POST',
+  });
+}

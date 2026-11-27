@@ -5,13 +5,15 @@ import { answerQuiz, finishQuiz, startQuiz } from '../api/client.js';
 const emit = defineEmits(['back', 'finished']);
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
-const QUIZ_REWARD_TIERS = [
+const DEFAULT_REWARD_TIERS = [
   { score: 1, title: 'Stickers' },
   { score: 2, title: '10% Off' },
   { score: 3, title: '25% Off' },
   { score: 4, title: '50% Off' },
   { score: 5, title: 'Free Course' },
 ];
+
+const rewardTiers = ref([...DEFAULT_REWARD_TIERS]);
 
 const questions = ref([]);
 const quizToken = ref('');
@@ -49,6 +51,9 @@ async function loadQuiz() {
     questions.value = data.questions;
     quizToken.value = data.token;
     total.value = data.total || data.questions.length;
+    if (Array.isArray(data.rewardTiers)) {
+      rewardTiers.value = data.rewardTiers;
+    }
   } catch (error) {
     errorMsg.value = error.message || 'Could not start the quiz.';
   } finally {
@@ -147,7 +152,7 @@ onMounted(loadQuiz);
     </div>
 
     <div v-if="isLoading" class="quiz-state" role="status">
-      <p>Loading your 5 questions…</p>
+      <p>Loading your quiz…</p>
     </div>
 
     <div v-else-if="finalScore !== null" class="quiz-result" aria-live="polite">
@@ -167,10 +172,10 @@ onMounted(loadQuiz);
         Gift unlocked: <strong>{{ wonPrize.title }}</strong>. View your win, snap your BIAI photo, then claim your prize!
       </p>
       <p v-else class="quiz-result__body">
-        No gift unlocked this round. Play again — get 1 correct for Stickers up to 5/5 for a Free Course!
+        No gift unlocked this round. Play again to unlock a prize!
       </p>
       <div class="quiz-result__actions">
-        <button v-if="finalScore === 0" type="button" class="btn btn--primary" @click="loadQuiz">
+        <button v-if="!wonPrize" type="button" class="btn btn--primary" @click="loadQuiz">
           PLAY AGAIN
         </button>
         <button type="button" class="btn quiz-back-btn" @click="$emit('back')">BACK TO GAMES</button>
@@ -202,9 +207,9 @@ onMounted(loadQuiz);
         ></span>
       </div>
 
-      <ul class="quiz-reward-ladder" aria-label="Quiz prize tiers by correct answers">
+      <ul v-if="rewardTiers.length" class="quiz-reward-ladder" aria-label="Quiz prize tiers by correct answers">
         <li
-          v-for="tier in QUIZ_REWARD_TIERS"
+          v-for="tier in rewardTiers"
           :key="tier.score"
           class="quiz-reward-tier"
           :class="{

@@ -13,12 +13,15 @@ import {
   fetchAdminRecords,
   fetchAuditLog,
   fetchDartRecords,
+  fetchQuizSettings,
   fetchWheelOdds,
   importRecordsCsv,
   logoutAdmin,
   rebuildAdminCsv,
+  resetQuizSettings,
   resetWheelOdds,
   updateDartRecord,
+  updateQuizSettings,
   updateWheelOdds,
 } from './api.js';
 import { clearAdminMarkers } from './session.js';
@@ -42,6 +45,13 @@ const wheelOdds = ref([]);
 const oddsDraft = reactive({});
 const oddsDirty = ref(false);
 const isSavingOdds = ref(false);
+const quizQuestionCount = ref(5);
+const quizMaxQuestions = ref(20);
+const quizAvailablePrizes = ref([]);
+const quizRewardsDraft = reactive({});
+const quizDefaults = ref({ questionCount: 5, rewardsByScore: {} });
+const quizDirty = ref(false);
+const isSavingQuiz = ref(false);
 const recordSource = ref('');
 const searchQuery = ref('');
 const isLoading = ref(false);
@@ -151,13 +161,14 @@ async function refreshAll({ quiet = false } = {}) {
   if (!quiet) errorMsg.value = '';
 
   try {
-    const [recordsData, dartData, photosData, csv, auditData, oddsData] = await Promise.all([
+    const [recordsData, dartData, photosData, csv, auditData, oddsData, quizData] = await Promise.all([
       fetchAdminRecords({ limit: 250 }),
       fetchDartRecords(),
       fetchAdminPhotos({ limit: 150 }),
       fetchAdminCsv(),
       fetchAuditLog(),
       fetchWheelOdds(),
+      fetchQuizSettings(),
     ]);
 
     records.value = recordsData.records;
@@ -167,6 +178,7 @@ async function refreshAll({ quiet = false } = {}) {
     csvText.value = typeof csv === 'string' ? csv : '';
     auditEntries.value = auditData.entries;
     applyWheelOddsPayload(oddsData, { preserveDraft: oddsDirty.value });
+    applyQuizSettingsPayload(quizData, { preserveDraft: quizDirty.value });
   } catch (error) {
     if (error.status === 404) {
       emit('expired');
@@ -253,6 +265,82 @@ async function resetOdds() {
     errorMsg.value = error.message || 'Could not reset wheel odds.';
   } finally {
     isSavingOdds.value = false;
+  }
+}
+
+function applyQuizSettingsPayload(payload, { preserveDraft = false } = {}) {
+  quizMaxQuestions.value = Number(payload?.maxQuestions || 20);
+  quizAvailablePrizes.value = Array.isArray(payload?.availablePrizes) ? payload.availablePrizes : [];
+  quizDefaults.value = payload?.defaults || { questionCount: 5, rewardsByScore: {} };
+  if (!preserveDraft) {
+    quizQuestionCount.value = Number(payload?.questionCount || 5);
+    const map = payload?.rewardsByScore || {};
+    for (let s = 1; s <= quizMaxQuestions.value; s += 1) {
+      quizRewardsDraft[String(s)] = map[String(s)] || '';
+    }
+    quizDirty.value = false;
+  }
+}
+
+const quizScoreRows = computed(() => {
+  const count = Math.max(1, Math.min(Number(quizQuestionCount.value) || 1, quizMaxQuestions.value));
+  return Array.from({ length: count }, (_, idx) => idx + 1);
+});
+
+function quizPrizeTitle(prizeId) {
+  if (!prizeId) return 'No prize';
+  return quizAvailablePrizes.value.find((p) => p.id === prizeId)?.title || prizeId;
+}
+
+async function saveQuizConfig() {
+  if (isSavingQuiz.value) return;
+  const count = Math.floor(Number(quizQuestionCount.value));
+  if (!Number.isInteger(count) || count < 1 || count > quizMaxQuestions.value) {
+    errorMsg.value = `Question count must be between 1 and ${quizMaxQuestions.value}.`;
+    return;
+  }
+
+  isSavingQuiz.value = true;
+  errorMsg.value = '';
+  successMsg.value = '';
+  try {
+    const rewardsByScore = {};
+    for (let s = 1; s <= count; s += 1) {
+      rewardsByScore[String(s)] = quizRewardsDraft[String(s)] || '';
+    }
+    const updated = await updateQuizSettings({ questionCount: count, rewardsByScore });
+    applyQuizSettingsPayload(updated, { preserveDraft: false });
+    successMsg.value = 'Quiz settings updated — live for the next quiz.';
+    await refreshAll({ quiet: true });
+  } catch (error) {
+    if (error.status === 404) {
+      emit('expired');
+      return;
+    }
+    errorMsg.value = error.message || 'Could not update quiz settings.';
+  } finally {
+    isSavingQuiz.value = false;
+  }
+}
+
+async function resetQuizConfig() {
+  if (isSavingQuiz.value) return;
+  isSavingQuiz.value = true;
+  errorMsg.value = '';
+  successMsg.value = '';
+  try {
+    const reset = await resetQuizSettings();
+    applyQuizSettingsPayload(reset, { preserveDraft: false });
+    successMsg.value = 'Quiz settings reset to defaults.';
+    await refreshAll({ quiet: true });
+  } catch (error) {
+    if (error.status === 404) {
+      emit('expired');
+      return;
+    }
+    errorMsg.value = error.message || 'Could not reset quiz settings.';
+  } finally {
+    isSavingQuiz.value = false;
   }
 }
 
@@ -647,6 +735,7 @@ onBeforeUnmount(() => {
             { key: 'photos', label: 'WINNER PHOTOS', count: winnerPhotos.length },
             { key: 'dart', label: 'MANUAL ENTRY', count: dartRecords.length },
             { key: 'odds', label: 'WHEEL ODDS', count: activeOddsCount },
+            { key: 'quiz', label: 'QUIZ SETTINGS', count: quizQuestionCount },
             { key: 'audit', label: 'AUDIT LOG', count: auditEntries.length },
           ]"
           :key="tab.key"
@@ -1086,6 +1175,81 @@ onBeforeUnmount(() => {
               </td>
               <td class="num"><strong>{{ draftPercent(item.id) }}</strong></td>
               <td class="num">{{ item.defaultWeight }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section v-else-if="activeTab === 'quiz'" class="admin-panel">
+      <div class="admin-toolbar">
+        <div class="admin-toolbar__filters" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <label for="admin-quiz-count" class="admin-toolbar__summary">
+            Questions per quiz (1–{{ quizMaxQuestions }}):
+          </label>
+          <input
+            id="admin-quiz-count"
+            v-model.number="quizQuestionCount"
+            type="number"
+            min="1"
+            :max="quizMaxQuestions"
+            step="1"
+            class="field__input"
+            style="max-width: 90px; padding: 6px 10px;"
+            @input="quizDirty = true"
+          />
+        </div>
+        <div class="admin-row-actions">
+          <button
+            type="button"
+            class="btn btn--compact"
+            :disabled="isSavingQuiz"
+            @click="resetQuizConfig"
+          >
+            RESET DEFAULTS
+          </button>
+          <button
+            type="button"
+            class="btn btn--compact btn--primary"
+            :disabled="isSavingQuiz"
+            @click="saveQuizConfig"
+          >
+            {{ isSavingQuiz ? 'SAVING…' : 'SAVE QUIZ SETTINGS' }}
+          </button>
+        </div>
+      </div>
+
+      <div class="admin-table-wrap admin-stage" tabindex="0">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Correct Answers</th>
+              <th>Reward</th>
+              <th>Default</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="score in quizScoreRows" :key="score">
+              <td class="num"><strong>{{ score }} / {{ quizScoreRows.length }}</strong></td>
+              <td>
+                <select
+                  v-model="quizRewardsDraft[String(score)]"
+                  class="field__input"
+                  style="max-width: 220px; padding: 6px 10px;"
+                  :aria-label="`Reward for score ${score}`"
+                  @change="quizDirty = true"
+                >
+                  <option value="">No prize</option>
+                  <option
+                    v-for="prize in quizAvailablePrizes"
+                    :key="prize.id"
+                    :value="prize.id"
+                  >
+                    {{ prize.title }}
+                  </option>
+                </select>
+              </td>
+              <td>{{ quizPrizeTitle(quizDefaults.rewardsByScore?.[String(score)]) }}</td>
             </tr>
           </tbody>
         </table>

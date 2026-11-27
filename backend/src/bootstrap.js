@@ -3,11 +3,13 @@ import { Admin } from './models/Admin.js';
 import { AdminAudit } from './models/AdminAudit.js';
 import { PendingPlay } from './models/PendingPlay.js';
 import { Player } from './models/Player.js';
+import { QuizConfig } from './models/QuizConfig.js';
 import { Record } from './models/Record.js';
 import { Spin } from './models/Spin.js';
 import { WheelConfig } from './models/WheelConfig.js';
 import { WinnerPhoto } from './models/WinnerPhoto.js';
-import { setWheelWeightOverrides } from './config/prizes.js';
+import { setQuizSettings, setWheelWeightOverrides } from './config/prizes.js';
+import { QUIZ_QUESTIONS } from './config/quiz.js';
 import { ensureAdminSeed } from './services/adminAuth.js';
 import { rebuildCsvFromMongo } from './services/csvStore.js';
 import { withRetry } from './services/retry.js';
@@ -51,6 +53,7 @@ export async function initDatabaseAndAdmin(config, { rebuildCsvOnPurge = true } 
     Player.init(),
     Spin.init(),
     WheelConfig.init(),
+    QuizConfig.init(),
     WinnerPhoto.init(),
   ]);
   await ensureAdminSeed(config);
@@ -61,6 +64,21 @@ export async function initDatabaseAndAdmin(config, { rebuildCsvOnPurge = true } 
       setWheelWeightOverrides(savedWheelConfig.weights);
     } catch (error) {
       console.warn('[wheel] Ignoring invalid saved wheel weights:', error.message);
+    }
+  }
+
+  const savedQuizConfig = await QuizConfig.findOne({ key: 'quiz-settings' }).lean();
+  if (savedQuizConfig) {
+    try {
+      setQuizSettings(
+        {
+          questionCount: savedQuizConfig.questionCount,
+          rewardsByScore: savedQuizConfig.rewardsByScore,
+        },
+        QUIZ_QUESTIONS.length
+      );
+    } catch (error) {
+      console.warn('[quiz] Ignoring invalid saved quiz settings:', error.message);
     }
   }
 

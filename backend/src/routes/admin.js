@@ -1,11 +1,16 @@
 import express from 'express';
 import {
   getEffectivePrizeWeights,
+  getEffectiveQuizSettings,
+  resetQuizSettings,
   resetWheelWeightOverrides,
+  setQuizSettings,
   setWheelWeightOverrides,
 } from '../config/prizes.js';
+import { QUIZ_QUESTIONS } from '../config/quiz.js';
 import { AdminAudit } from '../models/AdminAudit.js';
 import { Player } from '../models/Player.js';
+import { QuizConfig } from '../models/QuizConfig.js';
 import { Record, RECORD_SOURCES } from '../models/Record.js';
 import { Spin } from '../models/Spin.js';
 import { WheelConfig } from '../models/WheelConfig.js';
@@ -473,6 +478,78 @@ export function createAdminRouter(config) {
       await WheelConfig.deleteOne({ key: 'wheel-weights' });
       const reset = resetWheelWeightOverrides();
       await logAdminAction(req.admin.id, 'wheel.odds.reset', {});
+      return res.json(reset);
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.get('/quiz-settings', async (_req, res, next) => {
+    try {
+      const saved = await QuizConfig.findOne({ key: 'quiz-settings' }).lean();
+      if (saved) {
+        try {
+          setQuizSettings(
+            {
+              questionCount: saved.questionCount,
+              rewardsByScore: saved.rewardsByScore,
+            },
+            QUIZ_QUESTIONS.length
+          );
+        } catch {
+          // Keep current active settings if saved doc is invalid.
+        }
+      }
+      res.json(getEffectiveQuizSettings());
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.put('/quiz-settings', async (req, res, next) => {
+    try {
+      let updated;
+      try {
+        updated = setQuizSettings(
+          {
+            questionCount: req.body?.questionCount,
+            rewardsByScore: req.body?.rewardsByScore,
+          },
+          QUIZ_QUESTIONS.length
+        );
+      } catch (error) {
+        return res.status(400).json({ error: error.message });
+      }
+
+      await QuizConfig.findOneAndUpdate(
+        { key: 'quiz-settings' },
+        {
+          $set: {
+            questionCount: updated.questionCount,
+            rewardsByScore: updated.rewardsByScore,
+            updatedBy: req.admin.username,
+            updatedAt: new Date(),
+          },
+        },
+        { upsert: true, new: true }
+      );
+
+      await logAdminAction(req.admin.id, 'quiz.settings.update', {
+        questionCount: updated.questionCount,
+        rewardsByScore: updated.rewardsByScore,
+      });
+
+      return res.json(updated);
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.post('/quiz-settings/reset', async (req, res, next) => {
+    try {
+      await QuizConfig.deleteOne({ key: 'quiz-settings' });
+      const reset = resetQuizSettings();
+      await logAdminAction(req.admin.id, 'quiz.settings.reset', {});
       return res.json(reset);
     } catch (error) {
       return next(error);
